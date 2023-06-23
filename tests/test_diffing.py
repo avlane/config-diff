@@ -35,5 +35,24 @@ class DictDiffTests(unittest.TestCase):
         self.assertEqual(diff(1, 2), [Change(CHANGED, (), 1, 2)])
 
 
+class ListDiffTests(unittest.TestCase):
+    def test_lists_are_compared_by_position(self):
+        self.assertEqual(diff({"x": [1, 2, 3]}, {"x": [1, 5, 3]}),
+                         [Change(CHANGED, ("x", 1), 2, 5)])
+
+    def test_longer_and_shorter_lists(self):
+        self.assertEqual(diff({"x": [1]}, {"x": [1, 2]}), [Change(ADDED, ("x", 1), new=2)])
+        self.assertEqual(diff({"x": [1, 2]}, {"x": [1]}), [Change(REMOVED, ("x", 1), old=2)])
+
+    def test_nested_inside_list_items(self):
+        old = {"s": [{"n": "a", "p": 1}]}
+        new = {"s": [{"n": "a", "p": 2}]}
+        self.assertEqual(diff(old, new), [Change(CHANGED, ("s", 0, "p"), 1, 2)])
+
+    def test_list_replaced_by_dict(self):
+        self.assertEqual(diff({"a": [1]}, {"a": {"b": 1}}),
+                         [Change(CHANGED, ("a",), [1], {"b": 1})])
+
+
 if __name__ == "__main__":
     unittest.main()

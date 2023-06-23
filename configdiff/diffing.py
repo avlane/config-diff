@@ -33,5 +33,13 @@ def _diff(path, a, b, out):
         for key in b:
             if key not in a:
                 out.append(Change(ADDED, path + (key,), new=b[key]))
+    elif isinstance(a, list) and isinstance(b, list):
+        for index in range(max(len(a), len(b))):
+            if index >= len(b):
+                out.append(Change(REMOVED, path + (index,), old=a[index]))
+            elif index >= len(a):
+                out.append(Change(ADDED, path + (index,), new=b[index]))
+            else:
+                _diff(path + (index,), a[index], b[index], out)
     elif a != b:
         out.append(Change(CHANGED, path, a, b))
