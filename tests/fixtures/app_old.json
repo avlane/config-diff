@@ -1,0 +1,11 @@
+{
+  "name": "inventory-service",
+  "version": "2.3.1",
+  "debug": false,
+  "server": {"host": "0.0.0.0", "port": 8080, "workers": 4},
+  "database": {
+    "url": "postgres://db.internal/inventory",
+    "pool": {"min": 2, "max": 10}
+  },
+  "features": ["search", "export"]
+}

@@ -1,0 +1,12 @@
+{
+  "features": ["search", "export", "audit"],
+  "database": {
+    "pool": {"max": 20, "min": 2},
+    "url": "postgres://db.internal/inventory",
+    "timeout": 30
+  },
+  "server": {"workers": 8, "port": 8080, "host": "0.0.0.0"},
+  "debug": false,
+  "version": "2.4.0",
+  "name": "inventory-service"
+}
