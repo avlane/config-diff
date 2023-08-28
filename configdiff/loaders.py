@@ -1,6 +1,7 @@
 """Read configuration files into plain Python data."""
 from __future__ import annotations
 
+import configparser
 import json
 import os
 
@@ -16,8 +17,23 @@ def load_json(text):
         raise ConfigError("invalid JSON: %s" % exc)
 
 
-LOADERS = {"json": load_json}
-EXTENSIONS = {".json": "json"}
+def load_ini(text):
+    """Parse INI text into {section: {option: value}}.
+
+    Option names keep their case (configparser lower-cases them by default),
+    "%" is not special, and options without a value are None.
+    """
+    parser = configparser.ConfigParser(interpolation=None, allow_no_value=True, strict=True)
+    parser.optionxform = str
+    try:
+        parser.read_string(text)
+    except configparser.Error as exc:
+        raise ConfigError("invalid INI: %s" % exc.message.strip())
+    return {name: dict(parser[name]) for name in parser.sections()}
+
+
+LOADERS = {"json": load_json, "ini": load_ini}
+EXTENSIONS = {".json": "json", ".ini": "ini", ".cfg": "ini"}
 
 
 def detect_format(path):

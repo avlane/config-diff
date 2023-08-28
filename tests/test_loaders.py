@@ -1,6 +1,6 @@
 import unittest
 
-from configdiff.loaders import ConfigError, detect_format, load_file, load_json
+from configdiff.loaders import ConfigError, detect_format, load_file, load_ini, load_json
 from tests.helpers import TempDirTestCase
 
 
@@ -15,9 +15,40 @@ class JsonTests(unittest.TestCase):
         self.assertIn("line 1", str(ctx.exception))
 
 
+class IniTests(unittest.TestCase):
+    def test_sections_and_options(self):
+        data = load_ini("[a]\nx = 1\ny: two\n\n[b]\nz = 3\n")
+        self.assertEqual(data, {"a": {"x": "1", "y": "two"}, "b": {"z": "3"}})
+
+    def test_option_case_is_preserved(self):
+        self.assertEqual(load_ini("[a]\nPassWord = x\n"), {"a": {"PassWord": "x"}})
+
+    def test_percent_signs_are_literal(self):
+        self.assertEqual(load_ini("[a]\nfmt = %(asctime)s %d%%\n"), {"a": {"fmt": "%(asctime)s %d%%"}})
+
+    def test_option_without_value(self):
+        self.assertEqual(load_ini("[a]\nflag\n"), {"a": {"flag": None}})
+
+    def test_comments_are_ignored(self):
+        self.assertEqual(load_ini("# c\n; c\n[a]\n# c\nx = 1\n"), {"a": {"x": "1"}})
+
+    def test_duplicate_section_is_an_error(self):
+        with self.assertRaises(ConfigError) as ctx:
+            load_ini("[a]\nx=1\n[a]\ny=2\n")
+        self.assertIn("invalid INI", str(ctx.exception))
+
+    def test_option_before_any_section_is_an_error(self):
+        with self.assertRaises(ConfigError):
+            load_ini("x = 1\n")
+
+
 class LoadFileTests(TempDirTestCase):
     def test_detects_json_by_extension(self):
         self.assertEqual(detect_format("x/y/app.JSON"), "json")
+
+    def test_detects_ini(self):
+        self.assertEqual(detect_format("a.ini"), "ini")
+        self.assertEqual(detect_format("a.cfg"), "ini")
 
     def test_unknown_extension(self):
         with self.assertRaises(ConfigError) as ctx:

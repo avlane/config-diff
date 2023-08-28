@@ -37,6 +37,14 @@ class CliTests(TempDirTestCase):
         self.assertIn('+ features[2]: "audit"', out)
         self.assertEqual(len(out.splitlines()), 5)
 
+    def test_ini_files(self):
+        code, out, _ = run(fixture("settings_old.ini"), fixture("settings_new.ini"))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            '~ database.host: "db1.internal" -> "db2.internal"',
+            '~ logging.level: "INFO" -> "DEBUG"',
+        ])
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))
