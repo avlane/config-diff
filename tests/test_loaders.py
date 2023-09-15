@@ -1,6 +1,7 @@
 import unittest
 
-from configdiff.loaders import ConfigError, detect_format, load_file, load_ini, load_json
+from configdiff.loaders import (ConfigError, detect_format, load_env, load_file, load_ini,
+                                load_json)
 from tests.helpers import TempDirTestCase
 
 
@@ -42,6 +43,47 @@ class IniTests(unittest.TestCase):
             load_ini("x = 1\n")
 
 
+class EnvTests(unittest.TestCase):
+    def test_plain_values_and_comments(self):
+        data = load_env("# c\nA=1\n\nB = two words \nC=\n")
+        self.assertEqual(data, {"A": "1", "B": "two words", "C": ""})
+
+    def test_export_prefix(self):
+        self.assertEqual(load_env("export A=1\n"), {"A": "1"})
+
+    def test_single_quotes_are_literal(self):
+        self.assertEqual(load_env("A='x $Y \\n #z'\n"), {"A": "x $Y \\n #z"})
+
+    def test_double_quotes_process_escapes(self):
+        self.assertEqual(load_env('A="line1\\nline2 \\"q\\" \\\\ #x"\n'),
+                         {"A": 'line1\nline2 "q" \\ #x'})
+
+    def test_multiline_double_quoted_value(self):
+        self.assertEqual(load_env('KEY="-----BEGIN-----\nabc\n-----END-----"\nNEXT=1\n'),
+                         {"KEY": "-----BEGIN-----\nabc\n-----END-----", "NEXT": "1"})
+
+    def test_inline_comment_only_after_whitespace(self):
+        self.assertEqual(load_env("A=x#y # comment\n"), {"A": "x#y"})
+
+    def test_equals_inside_value(self):
+        self.assertEqual(load_env("URL=http://h/?a=b\n"), {"URL": "http://h/?a=b"})
+
+    def test_text_after_closing_quote_is_an_error(self):
+        with self.assertRaises(ConfigError) as ctx:
+            load_env('A="x" y\n')
+        self.assertIn("line 1", str(ctx.exception))
+
+    def test_unterminated_quote(self):
+        for text in ('A="x\n', "A='x\n"):
+            with self.assertRaises(ConfigError):
+                load_env(text)
+
+    def test_missing_equals_and_bad_names(self):
+        for text in ("JUSTAWORD\n", "1A=x\n", "A B=x\n"):
+            with self.assertRaises(ConfigError, msg=text):
+                load_env(text)
+
+
 class LoadFileTests(TempDirTestCase):
     def test_detects_json_by_extension(self):
         self.assertEqual(detect_format("x/y/app.JSON"), "json")
@@ -49,6 +91,10 @@ class LoadFileTests(TempDirTestCase):
     def test_detects_ini(self):
         self.assertEqual(detect_format("a.ini"), "ini")
         self.assertEqual(detect_format("a.cfg"), "ini")
+
+    def test_detects_env_files(self):
+        for name in (".env", "prod.env", ".env.local", "/srv/app/.env.production"):
+            self.assertEqual(detect_format(name), "env", name)
 
     def test_unknown_extension(self):
         with self.assertRaises(ConfigError) as ctx:

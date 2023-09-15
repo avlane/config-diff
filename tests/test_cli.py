@@ -45,6 +45,17 @@ class CliTests(TempDirTestCase):
             '~ logging.level: "INFO" -> "DEBUG"',
         ])
 
+    def test_env_files(self):
+        code, out, _ = run(fixture("prod.env"), fixture("staging.env"))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            '~ APP_ENV: "production" -> "staging"',
+            '~ DATABASE_URL: "postgres://app:s3cret@db.internal:5432/app" -> '
+            '"postgres://app:s3cret@db.staging:5432/app"',
+            '~ SECRET_KEY: "abc123" -> "def456"',
+            '+ DEBUG: "1"',
+        ])
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))
