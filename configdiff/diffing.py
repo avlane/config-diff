@@ -16,6 +16,22 @@ class Change:
     new: object = None
 
 
+def _equal(a, b):
+    """Equality for scalars that does not let Python's quirks hide changes.
+
+    In Python True == 1 and False == 0, so a flag that turned into a number
+    would compare equal. Booleans only equal booleans. 1 and 1.0 are the same
+    number, but "1" and 1 are different values.
+    """
+    if isinstance(a, bool) or isinstance(b, bool):
+        return type(a) is type(b) and a == b
+    if isinstance(a, (int, float)) and isinstance(b, (int, float)):
+        return a == b
+    if type(a) is not type(b):
+        return False
+    return a == b
+
+
 def diff(old, new):
     """Return the list of Changes that turn *old* into *new*."""
     changes = []
@@ -41,5 +57,5 @@ def _diff(path, a, b, out):
                 out.append(Change(ADDED, path + (index,), new=b[index]))
             else:
                 _diff(path + (index,), a[index], b[index], out)
-    elif a != b:
+    elif not _equal(a, b):
         out.append(Change(CHANGED, path, a, b))

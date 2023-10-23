@@ -35,6 +35,31 @@ class DictDiffTests(unittest.TestCase):
         self.assertEqual(diff(1, 2), [Change(CHANGED, (), 1, 2)])
 
 
+class ScalarEqualityTests(unittest.TestCase):
+    def test_bool_is_not_a_number(self):
+        for old, new in ((True, 1), (False, 0), (1, True), (0, False), (True, 1.0)):
+            self.assertEqual(diff({"a": old}, {"a": new}),
+                             [Change(CHANGED, ("a",), old, new)], (old, new))
+
+    def test_same_bools_are_equal(self):
+        self.assertEqual(diff({"a": True}, {"a": True}), [])
+
+    def test_string_and_number_differ(self):
+        self.assertEqual(len(diff({"a": "1"}, {"a": 1})), 1)
+        self.assertEqual(len(diff({"a": "true"}, {"a": True})), 1)
+
+    def test_int_and_float_with_equal_value_are_equal(self):
+        self.assertEqual(diff({"a": 1}, {"a": 1.0}), [])
+        self.assertEqual(len(diff({"a": 1}, {"a": 1.5})), 1)
+
+    def test_none_differs_from_empty_values(self):
+        for other in ("", 0, False, [], {}):
+            self.assertEqual(len(diff({"a": None}, {"a": other})), 1, other)
+
+    def test_bool_inside_lists(self):
+        self.assertEqual(len(diff({"a": [True]}, {"a": [1]})), 1)
+
+
 class ListDiffTests(unittest.TestCase):
     def test_lists_are_compared_by_position(self):
         self.assertEqual(diff({"x": [1, 2, 3]}, {"x": [1, 5, 3]}),
