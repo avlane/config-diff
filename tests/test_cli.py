@@ -1,5 +1,6 @@
 import contextlib
 import io
+import json
 import unittest
 
 from configdiff.cli import main
@@ -55,6 +56,17 @@ class CliTests(TempDirTestCase):
             '~ SECRET_KEY: "abc123" -> "def456"',
             '+ DEBUG: "1"',
         ])
+
+    def test_json_output(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "-o", "json")
+        self.assertEqual(code, 1)
+        doc = json.loads(out)
+        self.assertEqual(doc["summary"], {"added": 2, "removed": 0, "changed": 3})
+
+    def test_json_output_when_equal(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_old.json"), "--output", "json")
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(out)["equal"])
 
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")

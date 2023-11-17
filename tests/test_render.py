@@ -1,7 +1,9 @@
 import unittest
 
 from configdiff.diffing import ADDED, CHANGED, REMOVED, Change
-from configdiff.render import format_value, render_plain
+import json
+
+from configdiff.render import format_value, render_json, render_plain
 
 
 class RenderPlainTests(unittest.TestCase):
@@ -23,6 +25,31 @@ class RenderPlainTests(unittest.TestCase):
     def test_none_and_bools(self):
         self.assertEqual(format_value(None), "null")
         self.assertEqual(format_value(True), "true")
+
+
+class RenderJsonTests(unittest.TestCase):
+    def test_document(self):
+        changes = [Change(ADDED, ("a", 0), new=1), Change(REMOVED, ("b",), old=None),
+                   Change(CHANGED, ("c",), 1, 2)]
+        doc = json.loads(render_json(changes))
+        self.assertFalse(doc["equal"])
+        self.assertEqual(doc["summary"], {"added": 1, "removed": 1, "changed": 1})
+        self.assertEqual(doc["changes"][0], {"kind": "added", "path": "a[0]",
+                                             "segments": ["a", 0], "new": 1})
+        self.assertEqual(doc["changes"][1], {"kind": "removed", "path": "b",
+                                             "segments": ["b"], "old": None})
+        self.assertEqual(doc["changes"][2]["old"], 1)
+        self.assertEqual(doc["changes"][2]["new"], 2)
+
+    def test_equal(self):
+        doc = json.loads(render_json([]))
+        self.assertEqual(doc, {"equal": True, "summary": {"added": 0, "removed": 0, "changed": 0},
+                               "changes": []})
+
+    def test_dates_are_serialisable(self):
+        import datetime
+        out = render_json([Change(ADDED, ("d",), new=datetime.date(2023, 11, 18))])
+        self.assertEqual(json.loads(out)["changes"][0]["new"], "2023-11-18")
 
 
 if __name__ == "__main__":

@@ -12,3 +12,4 @@ compared by key, colored/plain/JSON output and exit codes that work in CI.
 Exit status: 0 if the files are equivalent, 1 if they differ, 2 on errors.
 Supported formats: JSON (`.json`), INI (`.ini`, `.cfg`) and dotenv files (`.env`, `prod.env`,
 `.env.local`).
+Use `-o json` for machine-readable output.

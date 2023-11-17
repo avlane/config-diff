@@ -7,7 +7,9 @@ import sys
 from . import __version__
 from .diffing import diff
 from .loaders import ConfigError, load_file
-from .render import render_plain
+from .render import render_json, render_plain
+
+RENDERERS = {"plain": render_plain, "json": render_json}
 
 EXIT_SAME = 0
 EXIT_DIFFERENT = 1
@@ -20,6 +22,8 @@ def build_parser():
         description="Semantic diff of two configuration files.")
     parser.add_argument("old", metavar="OLD", help="the original file")
     parser.add_argument("new", metavar="NEW", help="the changed file")
+    parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
+                        help="how to print the differences (default: plain)")
     parser.add_argument("--version", action="version", version="config-diff " + __version__)
     return parser
 
@@ -35,7 +39,7 @@ def main(argv=None, stdout=None, stderr=None):
         stderr.write("config-diff: error: %s\n" % exc)
         return EXIT_ERROR
     changes = diff(old, new)
-    stdout.write(render_plain(changes))
+    stdout.write(RENDERERS[args.output](changes))
     return EXIT_DIFFERENT if changes else EXIT_SAME
 
 
