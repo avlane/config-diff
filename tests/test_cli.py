@@ -68,6 +68,21 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 0)
         self.assertTrue(json.loads(out)["equal"])
 
+    def test_ignore_option(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"),
+                           "-i", "version", "--ignore", "**.workers", "-i", "database")
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), ['+ features[2]: "audit"'])
+
+    def test_ignoring_everything_exits_0(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "-i", "**")
+        self.assertEqual((code, out), (0, ""))
+
+    def test_bad_pattern_is_a_usage_error(self):
+        code, _, err = run(fixture("app_old.json"), fixture("app_new.json"), "-i", "a[")
+        self.assertEqual(code, 2)
+        self.assertIn("missing ]", err)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

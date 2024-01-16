@@ -13,3 +13,9 @@ Exit status: 0 if the files are equivalent, 1 if they differ, 2 on errors.
 Supported formats: JSON (`.json`), INI (`.ini`, `.cfg`) and dotenv files (`.env`, `prod.env`,
 `.env.local`).
 Use `-o json` for machine-readable output.
+Ignore noisy paths with `-i/--ignore` (repeatable):
+
+    config-diff old.json new.json -i version -i 'server.*.port' -i '**.password'
+
+Patterns are dotted paths: `*` matches one segment, `**` any number of
+segments, `[0]` / `[*]` list positions, `["a.b"]` a key that contains a dot.

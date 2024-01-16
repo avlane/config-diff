@@ -1,6 +1,7 @@
 import unittest
 
-from configdiff.diffing import ADDED, CHANGED, REMOVED, Change, diff
+from configdiff.diffing import ADDED, CHANGED, REMOVED, Change, Options, diff
+from configdiff.paths import parse_pattern
 
 
 class DictDiffTests(unittest.TestCase):
@@ -58,6 +59,50 @@ class ScalarEqualityTests(unittest.TestCase):
 
     def test_bool_inside_lists(self):
         self.assertEqual(len(diff({"a": [True]}, {"a": [1]})), 1)
+
+
+def ignoring(*patterns):
+    return Options(ignore=[parse_pattern(p) for p in patterns])
+
+
+class IgnoreTests(unittest.TestCase):
+    def test_ignored_change_is_not_reported(self):
+        old = {"a": 1, "b": 1}
+        new = {"a": 2, "b": 2}
+        self.assertEqual(diff(old, new, ignoring("a")), [Change(CHANGED, ("b",), 1, 2)])
+
+    def test_ignored_added_and_removed_keys(self):
+        self.assertEqual(diff({"x": 1}, {"y": 1}, ignoring("x", "y")), [])
+
+    def test_ignoring_a_section_ignores_everything_below(self):
+        old = {"cache": {"ttl": 1, "size": 2}, "k": 1}
+        new = {"cache": {"ttl": 9, "size": 9}, "k": 1}
+        self.assertEqual(diff(old, new, ignoring("cache")), [])
+
+    def test_deep_wildcard(self):
+        old = {"db": {"password": "a", "host": "h"}, "api": {"deep": {"password": "x"}}}
+        new = {"db": {"password": "b", "host": "h2"}, "api": {"deep": {"password": "y"}}}
+        self.assertEqual(diff(old, new, ignoring("**.password")),
+                         [Change(CHANGED, ("db", "host"), "h", "h2")])
+
+    def test_list_positions(self):
+        old = {"u": [{"id": 1, "seen": "a"}, {"id": 2, "seen": "b"}]}
+        new = {"u": [{"id": 1, "seen": "c"}, {"id": 2, "seen": "d"}]}
+        self.assertEqual(diff(old, new, ignoring("u[*].seen")), [])
+        self.assertEqual(len(diff(old, new, ignoring("u[0].seen"))), 1)
+
+    def test_ignored_parts_of_added_values_are_not_leaked(self):
+        old = {}
+        new = {"db": {"host": "h", "password": "hunter2"}, "list": [{"token": "t", "n": 1}]}
+        changes = diff(old, new, ignoring("**.password", "**.token"))
+        self.assertEqual(changes, [
+            Change(ADDED, ("db",), new={"host": "h"}),
+            Change(ADDED, ("list",), new=[{"n": 1}]),
+        ])
+
+    def test_ignored_parts_of_replaced_values_are_not_leaked(self):
+        changes = diff({"a": {"password": "x", "n": 1}}, {"a": "gone"}, ignoring("**.password"))
+        self.assertEqual(changes, [Change(CHANGED, ("a",), {"n": 1}, "gone")])
 
 
 class ListDiffTests(unittest.TestCase):

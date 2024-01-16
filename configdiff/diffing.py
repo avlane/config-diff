@@ -1,7 +1,7 @@
 """Semantic comparison of two parsed configurations."""
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 ADDED = "added"
 REMOVED = "removed"
@@ -32,30 +32,67 @@ def _equal(a, b):
     return a == b
 
 
-def diff(old, new):
+@dataclass
+class Options:
+    """Knobs for diff(); every field is optional."""
+    ignore: list = field(default_factory=list)    # Patterns whose paths are skipped
+
+    def is_ignored(self, path):
+        return any(p.matches(path) for p in self.ignore)
+
+
+_NO_OPTIONS = Options()
+
+
+def _prune(options, path, value):
+    """Drop ignored paths from a value that is reported whole (added/removed)."""
+    if not options.ignore:
+        return value
+    if isinstance(value, dict):
+        return {k: _prune(options, path + (k,), v) for k, v in value.items()
+                if not options.is_ignored(path + (k,))}
+    if isinstance(value, list):
+        return [_prune(options, path + (i,), v) for i, v in enumerate(value)
+                if not options.is_ignored(path + (i,))]
+    return value
+
+
+def diff(old, new, options=None):
     """Return the list of Changes that turn *old* into *new*."""
     changes = []
-    _diff((), old, new, changes)
+    _diff(options or _NO_OPTIONS, (), old, new, changes)
     return changes
 
 
-def _diff(path, a, b, out):
+def _diff(options, path, a, b, out):
+    if path and options.is_ignored(path):
+        return
     if isinstance(a, dict) and isinstance(b, dict):
         for key in a:
             if key not in b:
-                out.append(Change(REMOVED, path + (key,), old=a[key]))
+                _removed(options, path + (key,), a[key], out)
             else:
-                _diff(path + (key,), a[key], b[key], out)
+                _diff(options, path + (key,), a[key], b[key], out)
         for key in b:
             if key not in a:
-                out.append(Change(ADDED, path + (key,), new=b[key]))
+                _added(options, path + (key,), b[key], out)
     elif isinstance(a, list) and isinstance(b, list):
         for index in range(max(len(a), len(b))):
             if index >= len(b):
-                out.append(Change(REMOVED, path + (index,), old=a[index]))
+                _removed(options, path + (index,), a[index], out)
             elif index >= len(a):
-                out.append(Change(ADDED, path + (index,), new=b[index]))
+                _added(options, path + (index,), b[index], out)
             else:
-                _diff(path + (index,), a[index], b[index], out)
+                _diff(options, path + (index,), a[index], b[index], out)
     elif not _equal(a, b):
-        out.append(Change(CHANGED, path, a, b))
+        out.append(Change(CHANGED, path, _prune(options, path, a), _prune(options, path, b)))
+
+
+def _removed(options, path, value, out):
+    if not options.is_ignored(path):
+        out.append(Change(REMOVED, path, old=_prune(options, path, value)))
+
+
+def _added(options, path, value, out):
+    if not options.is_ignored(path):
+        out.append(Change(ADDED, path, new=_prune(options, path, value)))
