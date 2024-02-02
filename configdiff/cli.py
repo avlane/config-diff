@@ -17,6 +17,13 @@ EXIT_DIFFERENT = 1
 EXIT_ERROR = 2
 
 
+def _list_key(spec):
+    path, sep, name = spec.rpartition("=")
+    if not sep or not name:
+        raise PatternError("--list-key expects PATH=FIELD, got %r" % spec)
+    return parse_pattern(path), name
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="config-diff",
@@ -26,6 +33,9 @@ def build_parser():
     parser.add_argument("-i", "--ignore", action="append", default=[], metavar="PATH",
                         help="do not compare PATH, e.g. 'server.port', 'users[*].email' or "
                              "'**.password' (repeatable)")
+    parser.add_argument("-k", "--list-key", action="append", default=[], metavar="PATH=FIELD",
+                        help="compare the list at PATH by each item's FIELD instead of by "
+                             "position, e.g. 'servers=name' (repeatable)")
     parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
                         help="how to print the differences (default: plain)")
     parser.add_argument("--version", action="version", version="config-diff " + __version__)
@@ -38,7 +48,8 @@ def main(argv=None, stdout=None, stderr=None):
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
-        options = Options(ignore=[parse_pattern(p) for p in args.ignore])
+        options = Options(ignore=[parse_pattern(p) for p in args.ignore],
+                          list_keys=[_list_key(spec) for spec in args.list_key])
     except PatternError as exc:
         parser.error(str(exc))
     try:

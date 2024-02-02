@@ -3,6 +3,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from .paths import Item
+
+_MISSING = object()
+
 ADDED = "added"
 REMOVED = "removed"
 CHANGED = "changed"
@@ -35,7 +39,14 @@ def _equal(a, b):
 @dataclass
 class Options:
     """Knobs for diff(); every field is optional."""
-    ignore: list = field(default_factory=list)    # Patterns whose paths are skipped
+    ignore: list = field(default_factory=list)      # Patterns whose paths are skipped
+    list_keys: list = field(default_factory=list)   # [(Pattern, field)]: match items by field
+
+    def key_for_list(self, path):
+        for pattern, name in self.list_keys:
+            if pattern.matches(path):
+                return name
+        return None
 
     def is_ignored(self, path):
         return any(p.matches(path) for p in self.ignore)
@@ -77,6 +88,10 @@ def _diff(options, path, a, b, out):
             if key not in a:
                 _added(options, path + (key,), b[key], out)
     elif isinstance(a, list) and isinstance(b, list):
+        name = options.key_for_list(path)
+        if name is not None and _keyed(a, name) and _keyed(b, name):
+            _diff_keyed(options, path, a, b, name, out)
+            return
         for index in range(max(len(a), len(b))):
             if index >= len(b):
                 _removed(options, path + (index,), a[index], out)
@@ -86,6 +101,30 @@ def _diff(options, path, a, b, out):
                 _diff(options, path + (index,), a[index], b[index], out)
     elif not _equal(a, b):
         out.append(Change(CHANGED, path, _prune(options, path, a), _prune(options, path, b)))
+
+
+def _keyed(items, name):
+    """True if every item is a mapping with a distinct, hashable *name* field."""
+    if not all(isinstance(i, dict) and name in i for i in items):
+        return False
+    try:
+        return len({i[name] for i in items}) == len(items)
+    except TypeError:
+        return False
+
+
+def _diff_keyed(options, path, a, b, name, out):
+    """Compare lists of mappings by the value of one field instead of by position."""
+    for item in a:
+        sub = path + (Item(name, item[name]),)
+        other = next((o for o in b if o[name] == item[name]), _MISSING)
+        if other is _MISSING:
+            _removed(options, sub, item, out)
+        else:
+            _diff(options, sub, item, other, out)
+    for item in b:
+        if not any(o[name] == item[name] for o in a):
+            _added(options, path + (Item(name, item[name]),), item, out)
 
 
 def _removed(options, path, value, out):

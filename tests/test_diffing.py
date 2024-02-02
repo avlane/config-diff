@@ -1,7 +1,7 @@
 import unittest
 
 from configdiff.diffing import ADDED, CHANGED, REMOVED, Change, Options, diff
-from configdiff.paths import parse_pattern
+from configdiff.paths import Item, parse_pattern
 
 
 class DictDiffTests(unittest.TestCase):
@@ -103,6 +103,61 @@ class IgnoreTests(unittest.TestCase):
     def test_ignored_parts_of_replaced_values_are_not_leaked(self):
         changes = diff({"a": {"password": "x", "n": 1}}, {"a": "gone"}, ignoring("**.password"))
         self.assertEqual(changes, [Change(CHANGED, ("a",), {"n": 1}, "gone")])
+
+
+def keyed(spec, name):
+    return Options(list_keys=[(parse_pattern(spec), name)])
+
+
+class KeyedListTests(unittest.TestCase):
+    OLD = {"s": [{"n": "a", "p": 1}, {"n": "b", "p": 2}, {"n": "c", "p": 3}]}
+
+    def test_reordering_is_not_a_change(self):
+        new = {"s": [{"n": "c", "p": 3}, {"n": "a", "p": 1}, {"n": "b", "p": 2}]}
+        self.assertEqual(diff(self.OLD, new, keyed("s", "n")), [])
+        self.assertEqual(len(diff(self.OLD, new)), 6)  # by position it is noisy
+
+    def test_added_removed_and_changed_items(self):
+        new = {"s": [{"n": "b", "p": 20}, {"n": "d", "p": 4}, {"n": "a", "p": 1}]}
+        changes = diff(self.OLD, new, keyed("s", "n"))
+        self.assertEqual(changes, [
+            Change(CHANGED, ("s", Item("n", "b"), "p"), 2, 20),
+            Change(REMOVED, ("s", Item("n", "c")), old={"n": "c", "p": 3}),
+            Change(ADDED, ("s", Item("n", "d")), new={"n": "d", "p": 4}),
+        ])
+
+    def test_path_rendering(self):
+        from configdiff.paths import format_path
+        self.assertEqual(format_path(("s", Item("n", "b"), "p")), "s[n=b].p")
+
+    def test_integer_keys(self):
+        old = {"u": [{"id": 1, "v": "x"}, {"id": 2, "v": "y"}]}
+        new = {"u": [{"id": 2, "v": "y"}, {"id": 1, "v": "z"}]}
+        self.assertEqual(diff(old, new, keyed("u", "id")),
+                         [Change(CHANGED, ("u", Item("id", 1), "v"), "x", "z")])
+
+    def test_wildcard_in_the_list_path(self):
+        old = {"g": {"x": [{"n": 1, "v": 1}], "y": [{"n": 1, "v": 1}, {"n": 2, "v": 2}]}}
+        new = {"g": {"x": [{"n": 1, "v": 1}], "y": [{"n": 2, "v": 2}, {"n": 1, "v": 1}]}}
+        self.assertEqual(diff(old, new, keyed("g.*", "n")), [])
+
+    def test_falls_back_to_positions_when_keys_are_missing_or_duplicated(self):
+        for bad in ([{"n": "a"}, {"p": 1}], [{"n": "a"}, {"n": "a"}], [1, 2], [{"n": ["x"]}]):
+            old, new = {"s": bad}, {"s": list(reversed(bad))}
+            result = diff(old, new, keyed("s", "n"))
+            self.assertEqual(result, diff(old, new), bad)
+
+    def test_ignore_applies_inside_keyed_items(self):
+        old = {"s": [{"n": "a", "seen": 1}]}
+        new = {"s": [{"n": "a", "seen": 2}]}
+        opts = Options(ignore=[parse_pattern("s[*].seen")], list_keys=[(parse_pattern("s"), "n")])
+        self.assertEqual(diff(old, new, opts), [])
+
+    def test_item_pattern(self):
+        old = {"s": [{"n": "a", "p": 1}, {"n": "b", "p": 1}]}
+        new = {"s": [{"n": "b", "p": 2}, {"n": "a", "p": 2}]}
+        opts = Options(ignore=[parse_pattern("s[n=a].p")], list_keys=[(parse_pattern("s"), "n")])
+        self.assertEqual(diff(old, new, opts), [Change(CHANGED, ("s", Item("n", "b"), "p"), 1, 2)])
 
 
 class ListDiffTests(unittest.TestCase):

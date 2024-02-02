@@ -83,6 +83,27 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 2)
         self.assertIn("missing ]", err)
 
+    def test_list_key(self):
+        a, b = fixture("servers_old.json"), fixture("servers_new.json")
+        code, out, _ = run(a, b, "-k", "servers=name")
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            "- servers[name=web-1]: " + '{"name": "web-1", "port": 8001, "tags": ["a"]}',
+            "~ servers[name=web-2].port: 8002 -> 9002",
+            "+ servers[name=web-3]: " + '{"name": "web-3", "port": 8003, "tags": []}',
+        ])
+
+    def test_list_key_json_segments(self):
+        a, b = fixture("servers_old.json"), fixture("servers_new.json")
+        _, out, _ = run(a, b, "-k", "servers=name", "-o", "json")
+        segments = [c["segments"] for c in json.loads(out)["changes"]]
+        self.assertEqual(segments[1], ["servers", {"item": {"name": "web-2"}}, "port"])
+
+    def test_list_key_without_field_is_a_usage_error(self):
+        code, _, err = run(fixture("servers_old.json"), fixture("servers_new.json"), "-k", "servers")
+        self.assertEqual(code, 2)
+        self.assertIn("PATH=FIELD", err)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

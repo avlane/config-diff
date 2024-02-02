@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import json
 import re
+from dataclasses import dataclass
 
 
 def format_path(path):
@@ -11,9 +12,18 @@ def format_path(path):
     for segment in path:
         if isinstance(segment, int):
             out += "[%d]" % segment
+        elif isinstance(segment, Item):
+            out += "[%s=%s]" % (segment.field, segment.value)
         else:
             out += ("." if out else "") + str(segment)
     return out or "$"
+
+
+@dataclass(frozen=True)
+class Item:
+    """A list element identified by one of its fields: users[id=7]."""
+    field: str
+    value: object
 
 
 class PatternError(ValueError):
@@ -33,7 +43,10 @@ class _Token:
         if self.kind == "index":
             return isinstance(segment, int) and segment == self.value
         if self.kind == "anyindex":
-            return isinstance(segment, int)
+            return isinstance(segment, (int, Item))
+        if self.kind == "item":
+            return (isinstance(segment, Item) and segment.field == self.value[0]
+                    and str(segment.value) == self.value[1])
         if self.kind == "key":
             return isinstance(segment, str) and self.value.match(segment) is not None
         raise AssertionError(self.kind)
@@ -49,7 +62,8 @@ class Pattern:
 
     Syntax: segments separated by dots; "*" matches any one segment, "**" any
     number of segments (including none); a name may contain * and ? wildcards;
-    [3] is a list position and [*] any list position; ["a.b"] is a key written
+    [3] is a list position, [*] any list position and [id=7] the list element
+    whose "id" is 7 (see --list-key); ["a.b"] is a key written
     literally.
     """
 
@@ -124,6 +138,9 @@ def _bracket(text, i, tokens):
         tokens.append(_Token("anyindex"))
     elif inner.isdigit():
         tokens.append(_Token("index", int(inner)))
+    elif "=" in inner:
+        field, _, value = inner.partition("=")
+        tokens.append(_Token("item", (field, value)))
     else:
         raise PatternError("bad index %r in pattern %r" % (inner, text))
     return close + 1

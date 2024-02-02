@@ -1,0 +1,7 @@
+{
+  "servers": [
+    {"name": "db-1", "port": 5432, "tags": ["primary"]},
+    {"name": "web-2", "port": 9002, "tags": []},
+    {"name": "web-3", "port": 8003, "tags": []}
+  ]
+}

@@ -19,3 +19,6 @@ Ignore noisy paths with `-i/--ignore` (repeatable):
 
 Patterns are dotted paths: `*` matches one segment, `**` any number of
 segments, `[0]` / `[*]` list positions, `["a.b"]` a key that contains a dot.
+Lists are compared by position unless you say how to identify their items.
+`--list-key servers=name` matches the elements of `servers` by their `name`, so
+reordering is not a change and differences are reported as `servers[name=web-2].port`.
