@@ -36,6 +36,11 @@ def build_parser():
     parser.add_argument("-k", "--list-key", action="append", default=[], metavar="PATH=FIELD",
                         help="compare the list at PATH by each item's FIELD instead of by "
                              "position, e.g. 'servers=name' (repeatable)")
+    parser.add_argument("-u", "--unordered", action="append", default=[], metavar="PATH",
+                        help="the list at PATH is a set: ignore the order of its elements "
+                             "(repeatable)")
+    parser.add_argument("--unordered-lists", action="store_true",
+                        help="ignore the order of every list")
     parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
                         help="how to print the differences (default: plain)")
     parser.add_argument("--version", action="version", version="config-diff " + __version__)
@@ -49,7 +54,9 @@ def main(argv=None, stdout=None, stderr=None):
     args = parser.parse_args(argv)
     try:
         options = Options(ignore=[parse_pattern(p) for p in args.ignore],
-                          list_keys=[_list_key(spec) for spec in args.list_key])
+                          list_keys=[_list_key(spec) for spec in args.list_key],
+                          unordered=[parse_pattern(p) for p in
+                                     (["**"] if args.unordered_lists else args.unordered)])
     except PatternError as exc:
         parser.error(str(exc))
     try:

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from .diffing import ADDED, CHANGED, REMOVED
-from .paths import Item, format_path
+from .paths import Item, Member, format_path
 
 
 def format_value(value):
@@ -27,6 +27,8 @@ def summarize(changes):
 def _segment_json(segment):
     if isinstance(segment, Item):
         return {"item": {segment.field: segment.value}}
+    if isinstance(segment, Member):
+        return {"member": segment.value}
     return segment  # strings for keys, integers for list positions
 
 

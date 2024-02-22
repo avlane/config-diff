@@ -14,6 +14,8 @@ def format_path(path):
             out += "[%d]" % segment
         elif isinstance(segment, Item):
             out += "[%s=%s]" % (segment.field, segment.value)
+        elif isinstance(segment, Member):
+            out += "[=%s]" % json.dumps(segment.value, ensure_ascii=False, default=str)
         else:
             out += ("." if out else "") + str(segment)
     return out or "$"
@@ -23,6 +25,12 @@ def format_path(path):
 class Item:
     """A list element identified by one of its fields: users[id=7]."""
     field: str
+    value: object
+
+
+@dataclass(frozen=True)
+class Member:
+    """An element of an unordered list: tags[="beta"]."""
     value: object
 
 
@@ -44,6 +52,8 @@ class _Token:
             return isinstance(segment, int) and segment == self.value
         if self.kind == "anyindex":
             return isinstance(segment, (int, Item))
+        if self.kind == "member":
+            return isinstance(segment, Member)
         if self.kind == "item":
             return (isinstance(segment, Item) and segment.field == self.value[0]
                     and str(segment.value) == self.value[1])
@@ -63,7 +73,7 @@ class Pattern:
     Syntax: segments separated by dots; "*" matches any one segment, "**" any
     number of segments (including none); a name may contain * and ? wildcards;
     [3] is a list position, [*] any list position and [id=7] the list element
-    whose "id" is 7 (see --list-key); ["a.b"] is a key written
+    whose "id" is 7 (see --list-key) and [=*] any element of an unordered list; ["a.b"] is a key written
     literally.
     """
 
@@ -138,6 +148,8 @@ def _bracket(text, i, tokens):
         tokens.append(_Token("anyindex"))
     elif inner.isdigit():
         tokens.append(_Token("index", int(inner)))
+    elif inner == "=*":
+        tokens.append(_Token("member"))
     elif "=" in inner:
         field, _, value = inner.partition("=")
         tokens.append(_Token("item", (field, value)))

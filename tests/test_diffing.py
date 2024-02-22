@@ -1,7 +1,7 @@
 import unittest
 
 from configdiff.diffing import ADDED, CHANGED, REMOVED, Change, Options, diff
-from configdiff.paths import Item, parse_pattern
+from configdiff.paths import Item, Member, parse_pattern
 
 
 class DictDiffTests(unittest.TestCase):
@@ -158,6 +158,53 @@ class KeyedListTests(unittest.TestCase):
         new = {"s": [{"n": "b", "p": 2}, {"n": "a", "p": 2}]}
         opts = Options(ignore=[parse_pattern("s[n=a].p")], list_keys=[(parse_pattern("s"), "n")])
         self.assertEqual(diff(old, new, opts), [Change(CHANGED, ("s", Item("n", "b"), "p"), 1, 2)])
+
+
+def unordered(*specs):
+    return Options(unordered=[parse_pattern(s) for s in specs])
+
+
+class UnorderedListTests(unittest.TestCase):
+    def test_reordering_is_not_a_change(self):
+        self.assertEqual(diff({"t": ["a", "b", "c"]}, {"t": ["c", "a", "b"]}, unordered("t")), [])
+
+    def test_added_and_removed_elements(self):
+        changes = diff({"t": ["a", "b"]}, {"t": ["b", "c"]}, unordered("t"))
+        self.assertEqual(changes, [
+            Change(REMOVED, ("t", Member("a")), old="a"),
+            Change(ADDED, ("t", Member("c")), new="c"),
+        ])
+
+    def test_duplicates_are_counted(self):
+        changes = diff({"t": [1, 1, 2]}, {"t": [1, 2]}, unordered("t"))
+        self.assertEqual(changes, [Change(REMOVED, ("t", Member(1)), old=1)])
+
+    def test_elements_may_be_mappings(self):
+        old = {"t": [{"a": 1}, {"b": 2}]}
+        new = {"t": [{"b": 2}, {"a": 1}, {"c": 3}]}
+        self.assertEqual(diff(old, new, unordered("t")),
+                         [Change(ADDED, ("t", Member({"c": 3})), new={"c": 3})])
+
+    def test_types_still_matter(self):
+        self.assertEqual(len(diff({"t": [True]}, {"t": [1]}, unordered("t"))), 2)
+        self.assertEqual(len(diff({"t": ["1"]}, {"t": [1]}, unordered("t"))), 2)
+        self.assertEqual(diff({"t": [1]}, {"t": [1.0]}, unordered("t")), [])
+
+    def test_only_the_selected_lists_are_unordered(self):
+        old = {"a": [1, 2], "b": [1, 2]}
+        new = {"a": [2, 1], "b": [2, 1]}
+        self.assertEqual(len(diff(old, new, unordered("a"))), 2)  # b still differs
+
+    def test_member_rendering(self):
+        from configdiff.paths import format_path
+        self.assertEqual(format_path(("t", Member("beta"))), 't[="beta"]')
+        self.assertEqual(format_path(("t", Member(3))), "t[=3]")
+
+    def test_list_key_wins_over_unordered(self):
+        opts = Options(list_keys=[(parse_pattern("s"), "n")], unordered=[parse_pattern("s")])
+        old = {"s": [{"n": "a", "p": 1}]}
+        new = {"s": [{"n": "a", "p": 2}]}
+        self.assertEqual(diff(old, new, opts), [Change(CHANGED, ("s", Item("n", "a"), "p"), 1, 2)])
 
 
 class ListDiffTests(unittest.TestCase):

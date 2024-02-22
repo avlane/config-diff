@@ -104,6 +104,14 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 2)
         self.assertIn("PATH=FIELD", err)
 
+    def test_unordered_option(self):
+        a = self.write("a.json", '{"tags": ["x", "y"], "other": [1, 2]}')
+        b = self.write("b.json", '{"tags": ["y", "x"], "other": [2, 1]}')
+        code, out, _ = run(a, b, "-u", "tags")
+        self.assertEqual(code, 1)
+        self.assertEqual(len(out.splitlines()), 2)  # only "other" still differs
+        self.assertEqual(run(a, b, "--unordered-lists")[0], 0)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

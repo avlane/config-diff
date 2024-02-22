@@ -1,9 +1,10 @@
 """Semantic comparison of two parsed configurations."""
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass, field
 
-from .paths import Item
+from .paths import Item, Member
 
 _MISSING = object()
 
@@ -41,6 +42,10 @@ class Options:
     """Knobs for diff(); every field is optional."""
     ignore: list = field(default_factory=list)      # Patterns whose paths are skipped
     list_keys: list = field(default_factory=list)   # [(Pattern, field)]: match items by field
+    unordered: list = field(default_factory=list)   # Patterns of lists whose order is irrelevant
+
+    def is_unordered(self, path):
+        return any(p.matches(path) for p in self.unordered)
 
     def key_for_list(self, path):
         for pattern, name in self.list_keys:
@@ -92,6 +97,9 @@ def _diff(options, path, a, b, out):
         if name is not None and _keyed(a, name) and _keyed(b, name):
             _diff_keyed(options, path, a, b, name, out)
             return
+        if options.is_unordered(path):
+            _diff_unordered(options, path, a, b, out)
+            return
         for index in range(max(len(a), len(b))):
             if index >= len(b):
                 _removed(options, path + (index,), a[index], out)
@@ -125,6 +133,40 @@ def _diff_keyed(options, path, a, b, name, out):
     for item in b:
         if not any(o[name] == item[name] for o in a):
             _added(options, path + (Item(name, item[name]),), item, out)
+
+
+def _freeze(value):
+    """A hashable stand-in for *value* that follows the same equality as _equal."""
+    if isinstance(value, bool):
+        return ("bool", value)
+    if isinstance(value, (int, float)):
+        return ("num", value)
+    if isinstance(value, dict):
+        return ("map", frozenset((k, _freeze(v)) for k, v in value.items()))
+    if isinstance(value, list):
+        return ("list", tuple(_freeze(v) for v in value))
+    if value is None or isinstance(value, str):
+        return (type(value).__name__, value)
+    return ("other", repr(value))
+
+
+def _diff_unordered(options, path, a, b, out):
+    """Compare two lists as multisets: only the elements themselves matter."""
+    remaining = Counter(_freeze(v) for v in b)
+    unmatched = []
+    for value in a:
+        key = _freeze(value)
+        if remaining[key] > 0:
+            remaining[key] -= 1
+        else:
+            unmatched.append(value)
+    for value in unmatched:
+        _removed(options, path + (Member(value),), value, out)
+    for value in b:
+        key = _freeze(value)
+        if remaining[key] > 0:
+            remaining[key] -= 1
+            _added(options, path + (Member(value),), value, out)
 
 
 def _removed(options, path, value, out):
