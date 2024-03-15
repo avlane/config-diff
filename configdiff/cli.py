@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from . import __version__
@@ -11,10 +12,20 @@ from .paths import PatternError, parse_pattern
 from .render import render_json, render_plain
 
 RENDERERS = {"plain": render_plain, "json": render_json}
+COLOR_MODES = ("auto", "always", "never")
 
 EXIT_SAME = 0
 EXIT_DIFFERENT = 1
 EXIT_ERROR = 2
+
+
+def use_color(mode, stream, environ):
+    """Decide whether to emit ANSI colors: --color, then NO_COLOR, then the terminal."""
+    if mode == "always":
+        return True
+    if mode == "never" or environ.get("NO_COLOR"):
+        return False
+    return hasattr(stream, "isatty") and stream.isatty()
 
 
 def _list_key(spec):
@@ -43,6 +54,9 @@ def build_parser():
                         help="ignore the order of every list")
     parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
                         help="how to print the differences (default: plain)")
+    parser.add_argument("--color", choices=COLOR_MODES, default="auto",
+                        help="colorize plain output (default: auto = only on a terminal "
+                             "and when NO_COLOR is not set)")
     parser.add_argument("--version", action="version", version="config-diff " + __version__)
     return parser
 
@@ -66,7 +80,10 @@ def main(argv=None, stdout=None, stderr=None):
         stderr.write("config-diff: error: %s\n" % exc)
         return EXIT_ERROR
     changes = diff(old, new, options)
-    stdout.write(RENDERERS[args.output](changes))
+    if args.output == "plain":
+        stdout.write(render_plain(changes, use_color(args.color, stdout, os.environ)))
+    else:
+        stdout.write(RENDERERS[args.output](changes))
     return EXIT_DIFFERENT if changes else EXIT_SAME
 
 

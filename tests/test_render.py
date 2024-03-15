@@ -27,6 +27,26 @@ class RenderPlainTests(unittest.TestCase):
         self.assertEqual(format_value(True), "true")
 
 
+class RenderColorTests(unittest.TestCase):
+    CHANGES = [Change(ADDED, ("a",), new=1), Change(REMOVED, ("b",), old=2),
+               Change(CHANGED, ("c",), 3, 4)]
+
+    def test_color_off_is_identical_to_plain(self):
+        self.assertEqual(render_plain(self.CHANGES, color=False), render_plain(self.CHANGES))
+        self.assertNotIn("\x1b", render_plain(self.CHANGES))
+
+    def test_color_on_wraps_lines_in_escape_codes(self):
+        lines = render_plain(self.CHANGES, color=True).splitlines()
+        self.assertEqual(lines[0], "\x1b[32m+ a: 1\x1b[0m")
+        self.assertEqual(lines[1], "\x1b[31m- b: 2\x1b[0m")
+        self.assertIn("\x1b[31m3\x1b[0m -> \x1b[32m4\x1b[0m", lines[2])
+
+    def test_stripping_the_codes_gives_plain_text(self):
+        import re
+        colored = render_plain(self.CHANGES, color=True)
+        self.assertEqual(re.sub(r"\x1b\[\d+m", "", colored), render_plain(self.CHANGES))
+
+
 class RenderJsonTests(unittest.TestCase):
     def test_document(self):
         changes = [Change(ADDED, ("a", 0), new=1), Change(REMOVED, ("b",), old=None),

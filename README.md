@@ -22,3 +22,5 @@ segments, `[0]` / `[*]` list positions, `["a.b"]` a key that contains a dot.
 Lists are compared by position unless you say how to identify their items.
 `--list-key servers=name` matches the elements of `servers` by their `name`, so
 reordering is not a change and differences are reported as `servers[name=web-2].port`.
+On a terminal the plain output is colored; use `--color never` or set `NO_COLOR` to turn
+it off, `--color always` to force it.

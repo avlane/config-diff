@@ -54,15 +54,26 @@ def render_json(changes):
     return json.dumps(document, indent=2, ensure_ascii=False, default=_json_default) + "\n"
 
 
-def render_plain(changes):
+_RESET = "\x1b[0m"
+_COLORS = {"green": "\x1b[32m", "red": "\x1b[31m", "yellow": "\x1b[33m", "bold": "\x1b[1m"}
+
+
+def _paint(text, color, enabled):
+    return "%s%s%s" % (_COLORS[color], text, _RESET) if enabled else text
+
+
+def render_plain(changes, color=False):
+    """One line per change: "+ added", "- removed", "~ old -> new"."""
     lines = []
     for change in changes:
         path = format_path(change.path)
         if change.kind == ADDED:
-            lines.append("+ %s: %s" % (path, format_value(change.new)))
+            lines.append(_paint("+ %s: %s" % (path, format_value(change.new)), "green", color))
         elif change.kind == REMOVED:
-            lines.append("- %s: %s" % (path, format_value(change.old)))
+            lines.append(_paint("- %s: %s" % (path, format_value(change.old)), "red", color))
         else:
-            lines.append("~ %s: %s -> %s" % (path, format_value(change.old),
-                                             format_value(change.new)))
+            lines.append("%s %s: %s -> %s" % (
+                _paint("~", "yellow", color), _paint(path, "bold", color),
+                _paint(format_value(change.old), "red", color),
+                _paint(format_value(change.new), "green", color)))
     return "".join(line + "\n" for line in lines)

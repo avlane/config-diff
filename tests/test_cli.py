@@ -3,7 +3,7 @@ import io
 import json
 import unittest
 
-from configdiff.cli import main
+from configdiff.cli import main, use_color
 from tests.helpers import TempDirTestCase, fixture
 
 
@@ -112,6 +112,19 @@ class CliTests(TempDirTestCase):
         self.assertEqual(len(out.splitlines()), 2)  # only "other" still differs
         self.assertEqual(run(a, b, "--unordered-lists")[0], 0)
 
+    def test_color_always_and_never(self):
+        a, b = fixture("app_old.json"), fixture("app_new.json")
+        self.assertIn("\x1b[", run(a, b, "--color", "always")[1])
+        self.assertNotIn("\x1b[", run(a, b, "--color", "never")[1])
+
+    def test_color_auto_is_off_when_not_a_terminal(self):
+        a, b = fixture("app_old.json"), fixture("app_new.json")
+        self.assertNotIn("\x1b[", run(a, b)[1])
+
+    def test_json_output_is_never_colored(self):
+        a, b = fixture("app_old.json"), fixture("app_new.json")
+        json.loads(run(a, b, "-o", "json", "--color", "always")[1])
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))
@@ -133,6 +146,23 @@ class CliTests(TempDirTestCase):
         code, out, _ = run("--version")
         self.assertEqual(code, 0)
         self.assertTrue(out.startswith("config-diff "))
+
+
+class UseColorTests(unittest.TestCase):
+    class Tty(io.StringIO):
+        def isatty(self):
+            return True
+
+    def test_modes(self):
+        tty, pipe = self.Tty(), io.StringIO()
+        self.assertTrue(use_color("always", pipe, {"NO_COLOR": "1"}))
+        self.assertFalse(use_color("never", tty, {}))
+        self.assertTrue(use_color("auto", tty, {}))
+        self.assertFalse(use_color("auto", pipe, {}))
+
+    def test_no_color_convention(self):
+        self.assertFalse(use_color("auto", self.Tty(), {"NO_COLOR": "1"}))
+        self.assertTrue(use_color("auto", self.Tty(), {"NO_COLOR": ""}))
 
 
 if __name__ == "__main__":
