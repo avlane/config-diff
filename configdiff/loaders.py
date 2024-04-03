@@ -106,8 +106,20 @@ def _only_comment_after(rest, number):
         raise ConfigError("invalid .env: line %d: unexpected text after closing quote" % number)
 
 
-LOADERS = {"json": load_json, "ini": load_ini, "env": load_env}
-EXTENSIONS = {".json": "json", ".ini": "ini", ".cfg": "ini", ".env": "env"}
+def load_toml(text):
+    """Parse TOML with the standard library (Python 3.11+)."""
+    try:
+        import tomllib
+    except ImportError:
+        raise ConfigError("TOML support needs Python 3.11 or newer (tomllib)")
+    try:
+        return tomllib.loads(text)
+    except tomllib.TOMLDecodeError as exc:
+        raise ConfigError("invalid TOML: %s" % exc)
+
+
+LOADERS = {"json": load_json, "ini": load_ini, "env": load_env, "toml": load_toml}
+EXTENSIONS = {".json": "json", ".ini": "ini", ".cfg": "ini", ".env": "env", ".toml": "toml"}
 
 
 def detect_format(path):

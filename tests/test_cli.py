@@ -1,4 +1,5 @@
 import contextlib
+import importlib.util
 import io
 import json
 import unittest
@@ -124,6 +125,18 @@ class CliTests(TempDirTestCase):
     def test_json_output_is_never_colored(self):
         a, b = fixture("app_old.json"), fixture("app_new.json")
         json.loads(run(a, b, "-o", "json", "--color", "always")[1])
+
+    @unittest.skipUnless(importlib.util.find_spec("tomllib"), "tomllib needs Python 3.11")
+    def test_toml_files(self):
+        code, out, _ = run(fixture("service_old.toml"), fixture("service_new.toml"))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            '~ released: "2024-01-10" -> "2024-04-06"',
+            "~ server.port: 8080 -> 8443",
+            "~ server.tls: false -> true",
+            "~ database.pool.max: 10 -> 20",
+            '+ endpoints[0].methods[2]: "DELETE"',
+        ])
 
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")

@@ -10,8 +10,8 @@ compared by key, colored/plain/JSON output and exit codes that work in CI.
     config-diff old.json new.json
 
 Exit status: 0 if the files are equivalent, 1 if they differ, 2 on errors.
-Supported formats: JSON (`.json`), INI (`.ini`, `.cfg`) and dotenv files (`.env`, `prod.env`,
-`.env.local`).
+Supported formats: JSON (`.json`), INI (`.ini`, `.cfg`), dotenv files (`.env`, `prod.env`,
+`.env.local`) and TOML (`.toml`, needs Python 3.11 or newer for `tomllib`).
 Use `-o json` for machine-readable output.
 Ignore noisy paths with `-i/--ignore` (repeatable):
 

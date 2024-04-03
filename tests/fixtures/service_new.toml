@@ -1,0 +1,19 @@
+title = "inventory"
+released = 2024-04-06
+
+[server]
+host = "0.0.0.0"
+port = 8443
+tls = true
+
+[database]
+url = "postgres://db.internal/inventory"
+pool = { min = 2, max = 20 }
+
+[[endpoints]]
+path = "/items"
+methods = ["GET", "POST", "DELETE"]
+
+[[endpoints]]
+path = "/health"
+methods = ["GET"]

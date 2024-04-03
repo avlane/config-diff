@@ -1,7 +1,8 @@
+import importlib.util
 import unittest
 
 from configdiff.loaders import (ConfigError, detect_format, load_env, load_file, load_ini,
-                                load_json)
+                                load_json, load_toml)
 from tests.helpers import TempDirTestCase
 
 
@@ -82,6 +83,29 @@ class EnvTests(unittest.TestCase):
         for text in ("JUSTAWORD\n", "1A=x\n", "A B=x\n"):
             with self.assertRaises(ConfigError, msg=text):
                 load_env(text)
+
+
+HAS_TOMLLIB = importlib.util.find_spec("tomllib") is not None
+
+
+@unittest.skipUnless(HAS_TOMLLIB, "tomllib needs Python 3.11")
+class TomlTests(unittest.TestCase):
+    def test_tables_arrays_and_types(self):
+        data = load_toml('a = 1\nb = "x"\nc = [1, 2]\n[t]\nd = true\n[[l]]\ne = 1\n[[l]]\ne = 2\n')
+        self.assertEqual(data, {"a": 1, "b": "x", "c": [1, 2], "t": {"d": True},
+                                "l": [{"e": 1}, {"e": 2}]})
+
+    def test_dates_are_real_dates(self):
+        import datetime
+        self.assertEqual(load_toml("d = 2024-04-06\n"), {"d": datetime.date(2024, 4, 6)})
+
+    def test_error(self):
+        with self.assertRaises(ConfigError) as ctx:
+            load_toml("a = \n")
+        self.assertIn("invalid TOML", str(ctx.exception))
+
+    def test_detects_toml(self):
+        self.assertEqual(detect_format("pyproject.toml"), "toml")
 
 
 class LoadFileTests(TempDirTestCase):
