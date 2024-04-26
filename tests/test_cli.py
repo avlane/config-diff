@@ -138,6 +138,29 @@ class CliTests(TempDirTestCase):
             '+ endpoints[0].methods[2]: "DELETE"',
         ])
 
+    def test_redact_secrets_on_env_files(self):
+        code, out, _ = run(fixture("prod.env"), fixture("staging.env"), "--redact-secrets")
+        self.assertEqual(code, 1)
+        self.assertIn("~ SECRET_KEY: \"<redacted>\" -> \"<redacted>\"", out)
+        self.assertIn("postgres://app:***@db.internal:5432/app", out)
+        self.assertNotIn("abc123", out)
+        self.assertNotIn("def456", out)
+        self.assertNotIn("s3cret", out)
+
+    def test_redact_option_with_json_output(self):
+        a = self.write("a.json", '{"db": {"pw": "one", "host": "h"}}')
+        b = self.write("b.json", '{"db": {"pw": "two", "host": "h2"}}')
+        _, out, _ = run(a, b, "--redact", "db.pw", "-o", "json")
+        self.assertNotIn("one", out)
+        self.assertNotIn("two", out)
+        by_path = {c["path"]: c for c in json.loads(out)["changes"]}
+        self.assertEqual(by_path["db.pw"]["new"], "<redacted>")
+        self.assertEqual(by_path["db.host"]["new"], "h2")
+
+    def test_without_redaction_secrets_are_shown(self):
+        _, out, _ = run(fixture("prod.env"), fixture("staging.env"))
+        self.assertIn("abc123", out)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

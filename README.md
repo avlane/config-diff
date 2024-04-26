@@ -24,3 +24,9 @@ Lists are compared by position unless you say how to identify their items.
 reordering is not a change and differences are reported as `servers[name=web-2].port`.
 On a terminal the plain output is colored; use `--color never` or set `NO_COLOR` to turn
 it off, `--color always` to force it.
+## Secrets
+
+Diffs of `.env` files tend to end up in chat and pull requests. Hide values with
+`--redact PATH` (same patterns as `--ignore`) or `--redact-secrets`, which hides keys
+named like `password`, `secret`, `token`, `api_key`, `credential` and the password part of
+URLs such as `postgres://user:***@host/db`. Changes are still reported, without the values.

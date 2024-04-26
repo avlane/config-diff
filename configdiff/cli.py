@@ -9,6 +9,7 @@ from . import __version__
 from .diffing import Options, diff
 from .loaders import ConfigError, load_file
 from .paths import PatternError, parse_pattern
+from .redact import redact_changes, secret_patterns
 from .render import render_json, render_plain
 
 RENDERERS = {"plain": render_plain, "json": render_json}
@@ -52,6 +53,11 @@ def build_parser():
                              "(repeatable)")
     parser.add_argument("--unordered-lists", action="store_true",
                         help="ignore the order of every list")
+    parser.add_argument("--redact", action="append", default=[], metavar="PATH",
+                        help="hide the values at PATH in the output (repeatable)")
+    parser.add_argument("--redact-secrets", action="store_true",
+                        help="hide values of keys named like password, secret, token, "
+                             "api_key... and passwords inside URLs")
     parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
                         help="how to print the differences (default: plain)")
     parser.add_argument("--color", choices=COLOR_MODES, default="auto",
@@ -74,12 +80,20 @@ def main(argv=None, stdout=None, stderr=None):
     except PatternError as exc:
         parser.error(str(exc))
     try:
+        redactions = [parse_pattern(p) for p in args.redact]
+    except PatternError as exc:
+        parser.error(str(exc))
+    if args.redact_secrets:
+        redactions += secret_patterns()
+    try:
         old = load_file(args.old)
         new = load_file(args.new)
     except ConfigError as exc:
         stderr.write("config-diff: error: %s\n" % exc)
         return EXIT_ERROR
     changes = diff(old, new, options)
+    if redactions or args.redact_secrets:
+        changes = redact_changes(changes, redactions, mask_urls=args.redact_secrets)
     if args.output == "plain":
         stdout.write(render_plain(changes, use_color(args.color, stdout, os.environ)))
     else:
