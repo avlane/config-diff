@@ -134,17 +134,25 @@ def detect_format(path):
                           "supported extensions: %s" % (path, ", ".join(sorted(EXTENSIONS))))
 
 
-def load_file(path, fmt=None):
-    """Load *path*; the format comes from the extension unless *fmt* is given."""
-    fmt = fmt or detect_format(path)
+def load_text(text, fmt, name="<input>"):
+    """Parse *text* as format *fmt*; errors mention *name*."""
+    try:
+        return LOADERS[fmt](text)
+    except ConfigError as exc:
+        raise ConfigError("%s: %s" % (name, exc))
+
+
+def read_text(path):
     try:
         with open(path, encoding="utf-8") as handle:
-            text = handle.read()
+            return handle.read()
     except OSError as exc:
         raise ConfigError("cannot read %s: %s" % (path, exc.strerror or exc))
     except UnicodeDecodeError as exc:
         raise ConfigError("%s is not valid UTF-8: %s" % (path, exc))
-    try:
-        return LOADERS[fmt](text)
-    except ConfigError as exc:
-        raise ConfigError("%s: %s" % (path, exc))
+
+
+def load_file(path, fmt=None):
+    """Load *path*; the format comes from the extension unless *fmt* is given."""
+    fmt = fmt or detect_format(path)
+    return load_text(read_text(path), fmt, path)

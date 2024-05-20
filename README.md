@@ -30,3 +30,9 @@ Diffs of `.env` files tend to end up in chat and pull requests. Hide values with
 `--redact PATH` (same patterns as `--ignore`) or `--redact-secrets`, which hides keys
 named like `password`, `secret`, `token`, `api_key`, `credential` and the password part of
 URLs such as `postgres://user:***@host/db`. Changes are still reported, without the values.
+Read one side from standard input with `-` (say which format it is):
+
+    kubectl get cm app -o json | config-diff - app.json --old-format json
+
+Force a format with `-f/--format`, or `--old-format` / `--new-format`; the two
+files do not have to be in the same format.

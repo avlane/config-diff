@@ -8,12 +8,12 @@ from configdiff.cli import main, use_color
 from tests.helpers import TempDirTestCase, fixture
 
 
-def run(*argv):
+def run(*argv, stdin=""):
     out, err = io.StringIO(), io.StringIO()
     # argparse writes --help/--version/usage errors to the real streams.
     with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
         try:
-            code = main(list(argv), out, err)
+            code = main(list(argv), out, err, io.StringIO(stdin))
         except SystemExit as exc:
             code = exc.code
     return code, out.getvalue(), err.getvalue()
@@ -160,6 +160,46 @@ class CliTests(TempDirTestCase):
     def test_without_redaction_secrets_are_shown(self):
         _, out, _ = run(fixture("prod.env"), fixture("staging.env"))
         self.assertIn("abc123", out)
+
+    def test_stdin_needs_a_format(self):
+        code, _, err = run("-", fixture("app_old.json"), stdin="{}")
+        self.assertEqual(code, 2)
+        self.assertIn("--format", err)
+
+    def test_stdin_as_old(self):
+        text = '{"version": "2.3.1", "name": "inventory-service", "debug": false}'
+        code, out, _ = run("-", fixture("app_new.json"), "--old-format", "json", stdin=text)
+        self.assertEqual(code, 1)
+        self.assertIn("+ features", out)
+
+    def test_stdin_as_new_with_format_for_both(self):
+        code, out, _ = run(fixture("app_old.json"), "-", "-f", "json",
+                           stdin=open(fixture("app_old.json")).read())
+        self.assertEqual((code, out), (0, ""))
+
+    def test_stdin_errors_are_named(self):
+        code, _, err = run("-", fixture("app_old.json"), "-f", "json", stdin="{")
+        self.assertEqual(code, 2)
+        self.assertIn("<stdin>: invalid JSON", err)
+
+    def test_stdin_for_both_sides_is_rejected(self):
+        code, _, err = run("-", "-", "-f", "json")
+        self.assertEqual(code, 2)
+        self.assertIn("only one of", err)
+
+    def test_comparing_different_formats(self):
+        env = self.write("settings.env", "PORT=8080\nDEBUG=false\n")
+        js = self.write("settings.json", '{"PORT": "8080", "DEBUG": false}')
+        code, out, _ = run(env, js)
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), ['~ DEBUG: "false" -> false'])
+
+    def test_forcing_the_format_of_an_oddly_named_file(self):
+        a = self.write("one.conf", "[s]\nk = 1\n")
+        b = self.write("two.conf", "[s]\nk = 2\n")
+        self.assertEqual(run(a, b)[0], 2)
+        code, out, _ = run(a, b, "--format", "ini")
+        self.assertEqual((code, out), (1, '~ s.k: "1" -> "2"\n'))
 
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")

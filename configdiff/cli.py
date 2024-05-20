@@ -7,7 +7,7 @@ import sys
 
 from . import __version__
 from .diffing import Options, diff
-from .loaders import ConfigError, load_file
+from .loaders import LOADERS, ConfigError, load_file, load_text
 from .paths import PatternError, parse_pattern
 from .redact import redact_changes, secret_patterns
 from .render import render_json, render_plain
@@ -40,8 +40,13 @@ def build_parser():
     parser = argparse.ArgumentParser(
         prog="config-diff",
         description="Semantic diff of two configuration files.")
-    parser.add_argument("old", metavar="OLD", help="the original file")
-    parser.add_argument("new", metavar="NEW", help="the changed file")
+    parser.add_argument("old", metavar="OLD", help="the original file, or - for standard input")
+    parser.add_argument("new", metavar="NEW", help="the changed file, or - for standard input")
+    formats = ("auto",) + tuple(sorted(LOADERS))
+    parser.add_argument("-f", "--format", choices=formats, default="auto",
+                        help="input format of both files (default: from the extension)")
+    parser.add_argument("--old-format", choices=formats, help="input format of OLD only")
+    parser.add_argument("--new-format", choices=formats, help="input format of NEW only")
     parser.add_argument("-i", "--ignore", action="append", default=[], metavar="PATH",
                         help="do not compare PATH, e.g. 'server.port', 'users[*].email' or "
                              "'**.password' (repeatable)")
@@ -67,9 +72,20 @@ def build_parser():
     return parser
 
 
-def main(argv=None, stdout=None, stderr=None):
+def load_source(path, fmt, stdin):
+    """Load a file, or standard input when *path* is "-"."""
+    if path != "-":
+        return load_file(path, None if fmt == "auto" else fmt)
+    if fmt == "auto":
+        raise ConfigError("standard input has no file name: say which format it is with "
+                          "--format (or --old-format / --new-format)")
+    return load_text(stdin.read(), fmt, "<stdin>")
+
+
+def main(argv=None, stdout=None, stderr=None, stdin=None):
     stdout = stdout or sys.stdout
     stderr = stderr or sys.stderr
+    stdin = stdin or sys.stdin
     parser = build_parser()
     args = parser.parse_args(argv)
     try:
@@ -85,9 +101,11 @@ def main(argv=None, stdout=None, stderr=None):
         parser.error(str(exc))
     if args.redact_secrets:
         redactions += secret_patterns()
+    if args.old == "-" and args.new == "-":
+        parser.error("only one of OLD and NEW can be read from standard input")
     try:
-        old = load_file(args.old)
-        new = load_file(args.new)
+        old = load_source(args.old, args.old_format or args.format, stdin)
+        new = load_source(args.new, args.new_format or args.format, stdin)
     except ConfigError as exc:
         stderr.write("config-diff: error: %s\n" % exc)
         return EXIT_ERROR
