@@ -201,6 +201,17 @@ class CliTests(TempDirTestCase):
         code, out, _ = run(a, b, "--format", "ini")
         self.assertEqual((code, out), (1, '~ s.k: "1" -> "2"\n'))
 
+    def test_keys_containing_dots_are_unambiguous(self):
+        a = self.write("a.json", '{"logging": {"app.module": "INFO"}, "a": {"b": 1}}')
+        b = self.write("b.json", '{"logging": {"app.module": "DEBUG"}, "a": {"b": 2}}')
+        _, out, _ = run(a, b)
+        self.assertEqual(out.splitlines(), [
+            '~ logging["app.module"]: "INFO" -> "DEBUG"',
+            "~ a.b: 1 -> 2",
+        ])
+        _, out, _ = run(a, b, "-i", 'logging["app.module"]')
+        self.assertEqual(out.splitlines(), ["~ a.b: 1 -> 2"])
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

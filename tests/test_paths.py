@@ -1,6 +1,6 @@
 import unittest
 
-from configdiff.paths import PatternError, format_path, parse_pattern
+from configdiff.paths import Item, PatternError, format_path, parse_pattern
 
 
 class FormatPathTests(unittest.TestCase):
@@ -12,6 +12,32 @@ class FormatPathTests(unittest.TestCase):
 
     def test_leading_index(self):
         self.assertEqual(format_path((0, "a")), "[0].a")
+
+    def test_keys_with_dots_are_quoted(self):
+        self.assertEqual(format_path(("logging", "app.module", "level")),
+                         'logging["app.module"].level')
+        self.assertEqual(format_path(("a.b",)), '["a.b"]')
+        self.assertNotEqual(format_path(("a.b",)), format_path(("a", "b")))
+
+    def test_other_awkward_keys(self):
+        self.assertEqual(format_path(("x", "has space", "[0]", "*", "")),
+                         'x["has space"]["[0]"]["*"][""]')
+        self.assertEqual(format_path(("caf\u00e9",)), '["caf\u00e9"]')
+        self.assertEqual(format_path(('say "hi"',)), '["say \\"hi\\""]')
+
+    def test_digits_and_dashes_stay_plain(self):
+        self.assertEqual(format_path(("ports", "8080", "my-key_1")), "ports.8080.my-key_1")
+
+    def test_item_values(self):
+        self.assertEqual(format_path(("s", Item("name", "web-1"), "p")), "s[name=web-1].p")
+        self.assertEqual(format_path(("s", Item("name", "web 1"))), 's[name="web 1"]')
+        self.assertEqual(format_path(("s", Item("id", 7))), "s[id=7]")
+
+    def test_formatted_paths_parse_back_to_themselves(self):
+        paths = [("a.b", "c"), ("x", 3, "has space"), ("s", Item("name", "web 1"), "port"),
+                 ("t", "]"), ("q", '"')]
+        for path in paths:
+            self.assertTrue(parse_pattern(format_path(path)).matches(path), path)
 
 
 def m(pattern, path, **kw):
@@ -68,6 +94,13 @@ class PatternTests(unittest.TestCase):
     def test_ignore_case(self):
         self.assertTrue(m("**.*password*", ["DB", "MyPassword"], ignore_case=True))
         self.assertFalse(m("**.*password*", ["DB", "MyPassword"]))
+
+    def test_item_patterns(self):
+        self.assertTrue(m("s[name=web-1].p", ["s", Item("name", "web-1"), "p"]))
+        self.assertTrue(m('s[name="web 1"]', ["s", Item("name", "web 1")]))
+        self.assertTrue(m("s[id=7]", ["s", Item("id", 7)]))
+        self.assertFalse(m("s[id=7]", ["s", Item("id", 8)]))
+        self.assertTrue(m("s[*]", ["s", Item("id", 8)]))
 
     def test_errors(self):
         for bad in ("", "...", "a[", "a[x]", 'a["b', "a[1"):

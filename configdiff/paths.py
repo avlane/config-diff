@@ -6,18 +6,40 @@ import re
 from dataclasses import dataclass
 
 
+_PLAIN = re.compile(r"[A-Za-z0-9_\-]+\Z")
+
+
+def _quote(text):
+    return json.dumps(text, ensure_ascii=False)
+
+
+def _item_value(value):
+    if isinstance(value, str):
+        return value if _PLAIN.match(value) else _quote(value)
+    return json.dumps(value, ensure_ascii=False, default=str)
+
+
 def format_path(path):
-    """Render a path tuple as "server.ports[1].name"; the root is "$"."""
+    """Render a path tuple as "server.ports[1].name"; the root is "$".
+
+    Keys that contain anything but letters, digits, "_" and "-" are written in
+    brackets and quotes - ["db.host"] - so that a key containing a dot can't
+    be mistaken for two nested keys. The same notation works in patterns.
+    """
     out = ""
     for segment in path:
+        if isinstance(segment, bool):
+            raise TypeError("booleans are not path segments")
         if isinstance(segment, int):
             out += "[%d]" % segment
         elif isinstance(segment, Item):
-            out += "[%s=%s]" % (segment.field, segment.value)
+            out += "[%s=%s]" % (segment.field, _item_value(segment.value))
         elif isinstance(segment, Member):
             out += "[=%s]" % json.dumps(segment.value, ensure_ascii=False, default=str)
+        elif _PLAIN.match(segment):
+            out += ("." if out else "") + segment
         else:
-            out += ("." if out else "") + str(segment)
+            out += "[%s]" % _quote(segment)
     return out or "$"
 
 
@@ -126,6 +148,25 @@ def parse_pattern(text, ignore_case=False):
     return Pattern(text, tokens)
 
 
+def _closing_bracket(text, i):
+    """Index of the ] that closes the [ at *i*, skipping over "quoted" text."""
+    in_quotes = False
+    j = i + 1
+    while j < len(text):
+        char = text[j]
+        if in_quotes:
+            if char == "\\":
+                j += 1
+            elif char == '"':
+                in_quotes = False
+        elif char == '"':
+            in_quotes = True
+        elif char == "]":
+            return j
+        j += 1
+    return -1
+
+
 def _bracket(text, i, tokens):
     n = len(text)
     if text.startswith('["', i):
@@ -140,7 +181,7 @@ def _bracket(text, i, tokens):
             raise PatternError("bad quoted key in pattern %r" % text)
         tokens.append(_Token("key", re.compile(re.escape(key) + r"\Z")))
         return j + 2
-    close = text.find("]", i)
+    close = _closing_bracket(text, i)
     if close < 0:
         raise PatternError("missing ] in pattern %r" % text)
     inner = text[i + 1:close]
@@ -152,6 +193,11 @@ def _bracket(text, i, tokens):
         tokens.append(_Token("member"))
     elif "=" in inner:
         field, _, value = inner.partition("=")
+        if value.startswith('"'):
+            try:
+                value = json.loads(value)
+            except ValueError:
+                raise PatternError("bad quoted value in pattern %r" % text)
         tokens.append(_Token("item", (field, value)))
     else:
         raise PatternError("bad index %r in pattern %r" % (inner, text))
