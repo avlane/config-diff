@@ -11,6 +11,25 @@ class ConfigError(Exception):
     """A file could not be read or parsed."""
 
 
+_FORMATS = {}
+_EXTENSIONS = {}
+
+
+def register(name, *extensions):
+    """Class decorator-style registration of a loader for format *name*."""
+    def decorate(func):
+        _FORMATS[name] = func
+        for ext in extensions:
+            _EXTENSIONS[ext] = name
+        return func
+    return decorate
+
+
+def supported_formats():
+    return sorted(_FORMATS)
+
+
+@register("json", ".json")
 def load_json(text):
     try:
         return json.loads(text)
@@ -18,6 +37,7 @@ def load_json(text):
         raise ConfigError("invalid JSON: %s" % exc)
 
 
+@register("ini", ".ini", ".cfg")
 def load_ini(text):
     """Parse INI text into {section: {option: value}}.
 
@@ -37,6 +57,7 @@ _ENV_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*\Z")
 _ENV_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "$": "$"}
 
 
+@register("env", ".env")
 def load_env(text):
     """Parse a dotenv file into {NAME: value}.
 
@@ -106,6 +127,7 @@ def _only_comment_after(rest, number):
         raise ConfigError("invalid .env: line %d: unexpected text after closing quote" % number)
 
 
+@register("toml", ".toml")
 def load_toml(text):
     """Parse TOML with the standard library (Python 3.11+)."""
     try:
@@ -118,26 +140,22 @@ def load_toml(text):
         raise ConfigError("invalid TOML: %s" % exc)
 
 
-LOADERS = {"json": load_json, "ini": load_ini, "env": load_env, "toml": load_toml}
-EXTENSIONS = {".json": "json", ".ini": "ini", ".cfg": "ini", ".env": "env", ".toml": "toml"}
-
-
 def detect_format(path):
     name = os.path.basename(path).lower()
     if name == ".env" or name.startswith(".env."):
         return "env"
     ext = os.path.splitext(path)[1].lower()
     try:
-        return EXTENSIONS[ext]
+        return _EXTENSIONS[ext]
     except KeyError:
         raise ConfigError("cannot tell the format of %s from its name; "
-                          "supported extensions: %s" % (path, ", ".join(sorted(EXTENSIONS))))
+                          "supported extensions: %s" % (path, ", ".join(sorted(_EXTENSIONS))))
 
 
 def load_text(text, fmt, name="<input>"):
     """Parse *text* as format *fmt*; errors mention *name*."""
     try:
-        return LOADERS[fmt](text)
+        return _FORMATS[fmt](text)
     except ConfigError as exc:
         raise ConfigError("%s: %s" % (name, exc))
 

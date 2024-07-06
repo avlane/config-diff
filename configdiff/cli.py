@@ -7,7 +7,7 @@ import sys
 
 from . import __version__
 from .diffing import Options, diff
-from .loaders import LOADERS, ConfigError, load_file, load_text
+from .loaders import ConfigError, load_file, load_text, supported_formats
 from .paths import PatternError, parse_pattern
 from .redact import redact_changes, secret_patterns
 from .render import render_json, render_plain
@@ -42,7 +42,7 @@ def build_parser():
         description="Semantic diff of two configuration files.")
     parser.add_argument("old", metavar="OLD", help="the original file, or - for standard input")
     parser.add_argument("new", metavar="NEW", help="the changed file, or - for standard input")
-    formats = ("auto",) + tuple(sorted(LOADERS))
+    formats = ("auto",) + tuple(supported_formats())
     parser.add_argument("-f", "--format", choices=formats, default="auto",
                         help="input format of both files (default: from the extension)")
     parser.add_argument("--old-format", choices=formats, help="input format of OLD only")
