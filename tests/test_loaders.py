@@ -2,7 +2,7 @@ import importlib.util
 import unittest
 
 from configdiff.loaders import (ConfigError, detect_format, load_env, load_file, load_ini,
-                                load_json, load_toml)
+                                load_json, load_toml, load_yaml)
 from tests.helpers import TempDirTestCase
 
 
@@ -106,6 +106,20 @@ class TomlTests(unittest.TestCase):
 
     def test_detects_toml(self):
         self.assertEqual(detect_format("pyproject.toml"), "toml")
+
+
+class YamlLoaderTests(unittest.TestCase):
+    def test_parses(self):
+        self.assertEqual(load_yaml("a:\n  b: 1\n"), {"a": {"b": 1}})
+
+    def test_unsupported_features_become_config_errors(self):
+        with self.assertRaises(ConfigError) as ctx:
+            load_yaml("a: &x 1\n")
+        self.assertIn("unsupported YAML: line 1", str(ctx.exception))
+
+    def test_detects_yaml(self):
+        self.assertEqual(detect_format("a.yaml"), "yaml")
+        self.assertEqual(detect_format("a.yml"), "yaml")
 
 
 class LoadFileTests(TempDirTestCase):

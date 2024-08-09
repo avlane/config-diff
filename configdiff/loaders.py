@@ -127,6 +127,16 @@ def _only_comment_after(rest, number):
         raise ConfigError("invalid .env: line %d: unexpected text after closing quote" % number)
 
 
+@register("yaml", ".yaml", ".yml")
+def load_yaml(text):
+    """Parse the supported subset of YAML (see configdiff.yamlsubset)."""
+    from . import yamlsubset
+    try:
+        return yamlsubset.loads(text)
+    except yamlsubset.YamlSubsetError as exc:
+        raise ConfigError("invalid or unsupported YAML: %s" % exc)
+
+
 @register("toml", ".toml")
 def load_toml(text):
     """Parse TOML with the standard library (Python 3.11+)."""
