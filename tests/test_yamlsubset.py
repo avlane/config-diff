@@ -112,5 +112,71 @@ class MappingTests(unittest.TestCase):
             self.assertEqual(ctx.exception.line, line, text)
 
 
+class SequenceTests(unittest.TestCase):
+    def test_simple_sequence(self):
+        self.assertEqual(loads("- a\n- 2\n- true\n- ~\n"), ["a", 2, True, None])
+
+    def test_sequence_under_a_key_indented_or_not(self):
+        self.assertEqual(loads("a:\n  - 1\n  - 2\nb: 3\n"), {"a": [1, 2], "b": 3})
+        self.assertEqual(loads("a:\n- 1\n- 2\nb: 3\n"), {"a": [1, 2], "b": 3})
+
+    def test_sequence_of_mappings(self):
+        text = "servers:\n  - name: web-1\n    port: 80\n  - name: web-2\n    port: 81\n"
+        self.assertEqual(loads(text), {"servers": [{"name": "web-1", "port": 80},
+                                                    {"name": "web-2", "port": 81}]})
+
+    def test_mapping_inside_item_with_nested_sequence_at_the_same_indent(self):
+        text = "- name: a\n  tags:\n  - x\n  - y\n- name: b\n"
+        self.assertEqual(loads(text), [{"name": "a", "tags": ["x", "y"]}, {"name": "b"}])
+
+    def test_dash_on_its_own_line(self):
+        self.assertEqual(loads("-\n  a: 1\n-\n  - 2\n-\n"), [{"a": 1}, [2], None])
+
+    def test_nested_sequences(self):
+        self.assertEqual(loads("- - 1\n  - 2\n- - 3\n"), [[1, 2], [3]])
+
+    def test_comments_in_sequences(self):
+        self.assertEqual(loads("- a # first\n# between\n- b\n"), ["a", "b"])
+
+    def test_wrong_indentation_is_an_error(self):
+        with self.assertRaises(YamlSubsetError):
+            loads("- a\n  - b\n")
+
+
+class FlowTests(unittest.TestCase):
+    def test_sequences(self):
+        self.assertEqual(loads("a: [1, two, 'three', \"4\", true, ~]\n"),
+                         {"a": [1, "two", "three", "4", True, None]})
+        self.assertEqual(loads("a: []\nb: [ ]\nc: [1,]\n"), {"a": [], "b": [], "c": [1]})
+
+    def test_mappings(self):
+        self.assertEqual(loads("a: {x: 1, y: 'two', \"z\": [1, 2]}\n"),
+                         {"a": {"x": 1, "y": "two", "z": [1, 2]}})
+        self.assertEqual(loads("a: {}\n"), {"a": {}})
+
+    def test_nesting_and_urls(self):
+        self.assertEqual(loads("a: [{u: 'http://h:80/x'}, [1, [2]]]\n"),
+                         {"a": [{"u": "http://h:80/x"}, [1, [2]]]})
+
+    def test_key_without_value(self):
+        self.assertEqual(loads("a: {x, y: 1}\n"), {"a": {"x": None, "y": 1}})
+
+    def test_flow_as_sequence_item_and_document(self):
+        self.assertEqual(loads("- [1, 2]\n- {a: 1}\n"), [[1, 2], {"a": 1}])
+        self.assertEqual(loads("[1, 2]\n"), [1, 2])
+
+    def test_trailing_comment(self):
+        self.assertEqual(loads("a: [1, 2]  # note\n"), {"a": [1, 2]})
+
+    def test_words_with_spaces_are_one_plain_scalar(self):
+        self.assertEqual(loads("a: [1 2, b c]\n"), {"a": ["1 2", "b c"]})
+
+    def test_errors(self):
+        for bad in ("a: [1, 2\n", "a: {x: 1\n", "a: [[1] 2]\n", "a: {x: 1, x: 2}\n",
+                    "a: [1, 2] x\n", "a: [&x 1]\n"):
+            with self.assertRaises(YamlSubsetError, msg=bad):
+                loads(bad)
+
+
 if __name__ == "__main__":
     unittest.main()

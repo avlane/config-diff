@@ -6,7 +6,8 @@ instead of guessing.
 
 Supported:
 
-* block mappings, nested to any depth, with plain or quoted keys
+* block mappings and block sequences, nested to any depth, with plain or quoted keys
+* flow collections on a single line: ``[a, b]`` and ``{a: 1, b: [2, 3]}``
 * plain, 'single-quoted' and "double-quoted" scalars on one line
 * comments
 * null (``null``, ``~``, empty), booleans (``true``/``false``), integers
@@ -125,7 +126,7 @@ class _Parser:
         if line is None:
             return None
         if line.text == "-" or line.text.startswith("- "):
-            raise YamlSubsetError("block sequences are not supported yet", line.no)
+            return self._parse_sequence(line.indent)
         if self._split_key(line) is not None:
             return self._parse_mapping(line.indent)
         self._advance()
@@ -151,12 +152,43 @@ class _Parser:
             result[key] = self._parse_value(rest, line, indent)
         return result
 
+    def _parse_sequence(self, indent):
+        result = []
+        while True:
+            line = self._peek()
+            if line is None or line.indent < indent:
+                break
+            if line.indent > indent:
+                raise YamlSubsetError("unexpected indentation", line.no)
+            if not (line.text == "-" or line.text.startswith("- ")):
+                break  # e.g. the next key of a mapping that holds this sequence
+            rest = line.text[1:]
+            content = rest.lstrip(" ")
+            if not content or content.startswith("#"):
+                self._advance()
+                following = self._peek()
+                if following is not None and following.indent > indent:
+                    result.append(self._parse_block(following.indent))
+                else:
+                    result.append(None)
+                continue
+            # "- key: value" and "- - item": re-read the rest of the line as if it
+            # started at the column where the content begins.
+            column = indent + 1 + (len(rest) - len(content))
+            self.current = _Line(line.no, column, content, base=indent)
+            result.append(self._parse_block(column))
+        return result
+
     def _parse_value(self, rest, line, indent):
         """The value of "key: rest" where the key sits at column *indent*."""
         if rest == "" or rest.startswith("#"):
             following = self._peek()
-            if following is not None and following.indent > indent:
-                return self._parse_block(following.indent)
+            if following is not None:
+                if following.indent > indent:
+                    return self._parse_block(following.indent)
+                if following.indent == indent and (following.text == "-"
+                                                   or following.text.startswith("- ")):
+                    return self._parse_sequence(indent)  # "key:\n- a\n- b" is allowed
             return None
         return self._parse_inline(rest, line.no, indent)
 
@@ -192,13 +224,103 @@ class _Parser:
             self._expect_end(text[end:], number)
             return value
         if first in "[{":
-            raise YamlSubsetError("flow collections are not supported yet", number)
+            value, end = self._parse_flow(text, 0, number)
+            self._expect_end(text[end:], number)
+            return value
         if first in "&*!":
             raise YamlSubsetError("anchors, aliases and tags are not supported", number)
         plain = re.split(r"\s#", text, maxsplit=1)[0].rstrip()
         if re.search(r":(?: |\Z)", plain):
             raise YamlSubsetError("mapping values are not allowed here", number)
         return _resolve_plain(plain)
+
+    # ---- flow collections (single line only) -------------------------
+
+    def _parse_flow(self, text, i, number):
+        """Parse one flow node at text[i]; return (value, index after it)."""
+        i = self._skip_spaces(text, i)
+        if i >= len(text):
+            raise YamlSubsetError("unexpected end of flow collection (multi-line flow "
+                                  "collections are not supported)", number)
+        char = text[i]
+        if char == "[":
+            return self._parse_flow_sequence(text, i + 1, number)
+        if char == "{":
+            return self._parse_flow_mapping(text, i + 1, number)
+        if char in "\"'":
+            return self._read_quoted(text, i, number)
+        if char in "&*!":
+            raise YamlSubsetError("anchors, aliases and tags are not supported", number)
+        end = self._flow_plain_end(text, i)
+        return _resolve_plain(text[i:end].strip()), end
+
+    def _parse_flow_sequence(self, text, i, number):
+        items = []
+        while True:
+            i = self._skip_spaces(text, i)
+            if i < len(text) and text[i] == "]":
+                return items, i + 1
+            value, i = self._parse_flow(text, i, number)
+            items.append(value)
+            i = self._skip_spaces(text, i)
+            if i < len(text) and text[i] == ",":
+                i += 1
+            elif i < len(text) and text[i] == "]":
+                return items, i + 1
+            else:
+                raise YamlSubsetError("expected ',' or ']' in flow sequence", number)
+
+    def _parse_flow_mapping(self, text, i, number):
+        result = {}
+        while True:
+            i = self._skip_spaces(text, i)
+            if i < len(text) and text[i] == "}":
+                return result, i + 1
+            if i >= len(text):
+                raise YamlSubsetError("unterminated flow mapping (multi-line flow collections "
+                                      "are not supported)", number)
+            if text[i] in "\"'":
+                key, i = self._read_quoted(text, i, number)
+            elif text[i] in "[{":
+                raise YamlSubsetError("collections cannot be mapping keys", number)
+            else:
+                end = self._flow_plain_end(text, i)
+                key = text[i:end].strip()
+                i = end
+            i = self._skip_spaces(text, i)
+            value = None
+            if i < len(text) and text[i] == ":":
+                value, i = self._parse_flow(text, i + 1, number)
+                i = self._skip_spaces(text, i)
+            if key in result:
+                raise YamlSubsetError("duplicate key %r" % key, number)
+            result[key] = value
+            if i < len(text) and text[i] == ",":
+                i += 1
+            elif i < len(text) and text[i] == "}":
+                return result, i + 1
+            else:
+                raise YamlSubsetError("expected ',' or '}' in flow mapping", number)
+
+    @staticmethod
+    def _skip_spaces(text, i):
+        while i < len(text) and text[i] in " \t":
+            i += 1
+        return i
+
+    @staticmethod
+    def _flow_plain_end(text, i):
+        j = i
+        while j < len(text):
+            char = text[j]
+            if char in ",[]{}":
+                break
+            if char == ":" and (j + 1 >= len(text) or text[j + 1] in " ,]}"):
+                break
+            if char == "#" and j > i and text[j - 1] == " ":
+                break
+            j += 1
+        return j
 
     @staticmethod
     def _expect_end(rest, number):
