@@ -1,0 +1,22 @@
+version: "3.8"
+services:
+  worker:
+    deploy:
+      replicas: 4
+    command: >
+      run --queue default
+      --concurrency 4
+    image: registry.example.com/worker:1.5
+  web:
+    image: registry.example.com/web:1.4
+    ports:
+      - "8080:80"
+      - "8443:443"
+    environment:
+      LOG_LEVEL: debug   # temporarily
+      CACHE_TTL: 300
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+volumes:
+  data: {}

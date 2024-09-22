@@ -11,7 +11,21 @@ compared by key, colored/plain/JSON output and exit codes that work in CI.
 
 Exit status: 0 if the files are equivalent, 1 if they differ, 2 on errors.
 Supported formats: JSON (`.json`), INI (`.ini`, `.cfg`), dotenv files (`.env`, `prod.env`,
-`.env.local`) and TOML (`.toml`, needs Python 3.11 or newer for `tomllib`).
+`.env.local`), TOML (`.toml`, needs Python 3.11 or newer for `tomllib`) and YAML
+(`.yaml`, `.yml`).
+
+### About the YAML support
+
+There is no YAML parser in the Python standard library and config-diff has no
+dependencies, so it ships a small hand-written parser for the **subset** of YAML that
+configuration files use: block mappings and sequences, single-line flow collections,
+quoted and plain scalars, literal and folded block scalars, comments. It follows the
+YAML 1.2 core schema (`yes`/`no`/`on`/`off` are strings, mapping keys are always strings).
+
+It never builds arbitrary objects, and it refuses what it does not implement - anchors
+and aliases, merge keys, tags, multiple documents, complex keys, multi-line plain or
+quoted scalars - with an error that names the line, rather than guessing. If you need
+those, convert the file to JSON first (for example `yq -o=json`) and diff that.
 Use `-o json` for machine-readable output.
 Ignore noisy paths with `-i/--ignore` (repeatable):
 

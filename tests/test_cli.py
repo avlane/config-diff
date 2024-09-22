@@ -212,6 +212,23 @@ class CliTests(TempDirTestCase):
         _, out, _ = run(a, b, "-i", 'logging["app.module"]')
         self.assertEqual(out.splitlines(), ["~ a.b: 1 -> 2"])
 
+    def test_yaml_files(self):
+        code, out, _ = run(fixture("compose_old.yaml"), fixture("compose_new.yaml"))
+        self.assertEqual(code, 1)
+        self.assertEqual(sorted(out.splitlines()), sorted([
+            '~ services.web.ports[0]: "8080:80" -> "8080:80"'[:0] or '+ services.web.ports[1]: "8443:443"',
+            '~ services.web.environment.LOG_LEVEL: "info" -> "debug"',
+            '~ services.worker.image: "registry.example.com/worker:1.4" -> '
+            '"registry.example.com/worker:1.5"',
+            "~ services.worker.deploy.replicas: 2 -> 4",
+        ]))
+
+    def test_unsupported_yaml_is_reported_with_a_line_number(self):
+        a = self.write("a.yaml", "x: &a 1\ny: *a\n")
+        code, _, err = run(a, a)
+        self.assertEqual(code, 2)
+        self.assertIn("a.yaml: invalid or unsupported YAML: line 1", err)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

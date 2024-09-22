@@ -9,10 +9,17 @@ Supported:
 * block mappings and block sequences, nested to any depth, with plain or quoted keys
 * flow collections on a single line: ``[a, b]`` and ``{a: 1, b: [2, 3]}``
 * plain, 'single-quoted' and "double-quoted" scalars on one line
+* literal (``|``) and folded (``>``) block scalars, with ``-`` / ``+`` chomping
 * comments
 * null (``null``, ``~``, empty), booleans (``true``/``false``), integers
   (decimal, ``0x`` and ``0o``) and floats, following the YAML 1.2 core schema:
   ``yes``, ``no``, ``on``, ``off`` and dates are plain strings
+
+Not supported, and reported as errors: anchors and aliases (``&a``, ``*a``,
+``<<``), tags (``!!str``), multiple documents, directives, complex keys
+(``? key``), explicit indentation indicators for block scalars, and scalars or
+flow collections that continue on the next line. Mapping keys are always
+strings.
 """
 from __future__ import annotations
 
@@ -85,6 +92,8 @@ class _Parser:
         self.raw = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
         self.pos = 0          # next unread index in self.raw
         self.current = None   # the logical line that was peeked but not consumed yet
+        self.seen_marker = False
+        self.seen_content = False
 
     # ---- line handling -------------------------------------------------
 
@@ -99,6 +108,18 @@ class _Parser:
             stripped = raw.lstrip(" \t")
             if not stripped or stripped.startswith("#"):
                 continue
+            if stripped == "..." and not raw.startswith(" "):
+                self.pos = len(self.raw)  # end of document
+                return None
+            if stripped == "---" and not raw.startswith(" "):
+                if self.seen_marker or self.seen_content:
+                    raise YamlSubsetError("multiple documents are not supported", number)
+                self.seen_marker = True
+                continue
+            if raw.startswith("--- ") or raw.startswith("%"):
+                raise YamlSubsetError("document markers with content and directives are not "
+                                      "supported", number)
+            self.seen_content = True
             lead = raw[:len(raw) - len(stripped)]
             if "\t" in lead:
                 raise YamlSubsetError("tabs are not allowed for indentation", number)
@@ -127,6 +148,8 @@ class _Parser:
             return None
         if line.text == "-" or line.text.startswith("- "):
             return self._parse_sequence(line.indent)
+        if line.text.startswith("? "):
+            raise YamlSubsetError("complex mapping keys are not supported", line.no)
         if self._split_key(line) is not None:
             return self._parse_mapping(line.indent)
         self._advance()
@@ -146,6 +169,8 @@ class _Parser:
             if split is None:
                 raise YamlSubsetError("expected 'key: value'", line.no)
             key, rest = split
+            if key == "<<":
+                raise YamlSubsetError("merge keys (<<) are not supported", line.no)
             self._advance()
             if key in result:
                 raise YamlSubsetError("duplicate key %r" % key, line.no)
@@ -219,6 +244,8 @@ class _Parser:
     def _parse_inline(self, text, number, parent):
         """Parse the value text that follows "key:" (or stands alone)."""
         first = text[0]
+        if first in "|>":
+            return self._parse_block_scalar(text, number, parent)
         if first in "\"'":
             value, end = self._read_quoted(text, 0, number)
             self._expect_end(text[end:], number)
@@ -233,6 +260,60 @@ class _Parser:
         if re.search(r":(?: |\Z)", plain):
             raise YamlSubsetError("mapping values are not allowed here", number)
         return _resolve_plain(plain)
+
+    def _parse_block_scalar(self, header, number, parent):
+        """Read a | or > scalar; its lines follow, indented deeper than *parent*."""
+        match = re.fullmatch(r"([|>])([+-]?)\s*(?:#.*)?", header)
+        if match is None:
+            raise YamlSubsetError("unsupported block scalar header %r (indentation indicators "
+                                  "are not supported)" % header, number)
+        style, chomp = match.group(1), match.group(2)
+        lines = []
+        block_indent = None
+        while self.pos < len(self.raw):
+            raw = self.raw[self.pos].rstrip("\r")
+            if not raw.strip():
+                lines.append("")
+                self.pos += 1
+                continue
+            indent = len(raw) - len(raw.lstrip(" "))
+            if block_indent is None:
+                if indent <= parent:
+                    break
+                block_indent = indent
+            elif indent < block_indent:
+                break
+            lines.append(raw[block_indent:])
+            self.pos += 1
+        trailing = 0
+        while lines and lines[-1] == "":
+            lines.pop()
+            trailing += 1
+        body = "\n".join(lines) if style == "|" else self._fold(lines)
+        if chomp == "-":
+            return body
+        if chomp == "+":
+            return body + "\n" * (trailing + 1) if lines else "\n" * trailing
+        return body + "\n" if lines else ""
+
+    @staticmethod
+    def _fold(lines):
+        """Folded style: single line breaks become spaces, blank lines become breaks."""
+        out = []
+        for i, line in enumerate(lines):
+            if i == 0:
+                out.append(line)
+                continue
+            previous = lines[i - 1]
+            if line == "":
+                out.append("\n")
+            elif previous == "":
+                out.append(line)
+            elif line[0] in " \t" or previous[0] in " \t":
+                out.append("\n" + line)  # more-indented lines keep their line breaks
+            else:
+                out.append(" " + line)
+        return "".join(out)
 
     # ---- flow collections (single line only) -------------------------
 

@@ -178,5 +178,71 @@ class FlowTests(unittest.TestCase):
                 loads(bad)
 
 
+class BlockScalarTests(unittest.TestCase):
+    def test_literal(self):
+        text = "a: |\n  line one\n  line two\n\n  after blank\nb: 1\n"
+        self.assertEqual(loads(text), {"a": "line one\nline two\n\nafter blank\n", "b": 1})
+
+    def test_folded(self):
+        text = "a: >\n  folded\n  text\n\n  new paragraph\n"
+        self.assertEqual(loads(text), {"a": "folded text\nnew paragraph\n"})
+
+    def test_folded_keeps_more_indented_lines(self):
+        text = "a: >\n  intro\n    code\n    more\n  outro\n"
+        self.assertEqual(loads(text), {"a": "intro\n  code\n  more\noutro\n"})
+
+    def test_chomping(self):
+        base = "a: %s\n  text\n\n\nb: 1\n"
+        self.assertEqual(loads(base % "|")["a"], "text\n")
+        self.assertEqual(loads(base % "|-")["a"], "text")
+        self.assertEqual(loads(base % "|+")["a"], "text\n\n\n")
+
+    def test_relative_indentation_is_kept(self):
+        text = "a: |\n  def f():\n      return 1\n"
+        self.assertEqual(loads(text), {"a": "def f():\n    return 1\n"})
+
+    def test_hash_and_colons_are_content(self):
+        self.assertEqual(loads("a: |\n  # not a comment\n  k: v\n"), {"a": "# not a comment\nk: v\n"})
+
+    def test_empty_block_scalar(self):
+        self.assertEqual(loads("a: |\nb: 1\n"), {"a": "", "b": 1})
+
+    def test_block_scalar_in_a_sequence_item(self):
+        self.assertEqual(loads("- |\n  one\n  two\n- x\n"), ["one\ntwo\n", "x"])
+
+    def test_block_scalar_in_a_nested_mapping_in_a_sequence(self):
+        text = "- name: x\n  script: |\n    echo hi\n    echo bye\n  next: 1\n"
+        self.assertEqual(loads(text), [{"name": "x", "script": "echo hi\necho bye\n", "next": 1}])
+
+    def test_header_comment(self):
+        self.assertEqual(loads("a: | # explain\n  x\n"), {"a": "x\n"})
+
+    def test_explicit_indentation_indicator_is_unsupported(self):
+        with self.assertRaises(YamlSubsetError):
+            loads("a: |2\n   x\n")
+
+
+class UnsupportedTests(unittest.TestCase):
+    def test_each_is_rejected_with_a_line_number(self):
+        cases = {
+            "a: 1\n---\nb: 2\n": 2,              # second document
+            "---\na: 1\n---\nb: 2\n": 3,
+            "%YAML 1.2\n---\na: 1\n": 1,
+            "base: &b {x: 1}\nuse:\n  <<: *b\n": 1,
+            "x:\n  <<: {a: 1}\n": 2,
+            "? complex\n: value\n": 1,
+            "--- text\n": 1,
+        }
+        for text, line in cases.items():
+            with self.assertRaises(YamlSubsetError, msg=text) as ctx:
+                loads(text)
+            self.assertEqual(ctx.exception.line, line, text)
+
+    def test_a_single_document_marker_is_fine(self):
+        self.assertEqual(loads("---\na: 1\n"), {"a": 1})
+        self.assertEqual(loads("---\na: 1\n...\n"), {"a": 1})
+        self.assertEqual(loads("# c\n---\n- 1\n"), [1])
+
+
 if __name__ == "__main__":
     unittest.main()
