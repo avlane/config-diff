@@ -194,6 +194,15 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 1)
         self.assertEqual(out.splitlines(), ['~ DEBUG: "false" -> false'])
 
+    def test_coerce_makes_env_comparable_with_typed_formats(self):
+        env = self.write("settings.env", "PORT=8080\nDEBUG=false\nNAME=svc\n")
+        js = self.write("settings.json", '{"PORT": 8080, "DEBUG": false, "NAME": "svc"}')
+        self.assertEqual(run(env, js)[0], 1)
+        self.assertEqual(run(env, js, "--coerce")[0], 0)
+        js2 = self.write("settings2.json", '{"PORT": 9090, "DEBUG": false, "NAME": "svc"}')
+        code, out, _ = run(env, js2, "--coerce")
+        self.assertEqual((code, out), (1, "~ PORT: 8080 -> 9090\n"))
+
     def test_forcing_the_format_of_an_oddly_named_file(self):
         a = self.write("one.conf", "[s]\nk = 1\n")
         b = self.write("two.conf", "[s]\nk = 2\n")
@@ -216,7 +225,7 @@ class CliTests(TempDirTestCase):
         code, out, _ = run(fixture("compose_old.yaml"), fixture("compose_new.yaml"))
         self.assertEqual(code, 1)
         self.assertEqual(sorted(out.splitlines()), sorted([
-            '~ services.web.ports[0]: "8080:80" -> "8080:80"'[:0] or '+ services.web.ports[1]: "8443:443"',
+            '+ services.web.ports[1]: "8443:443"',
             '~ services.web.environment.LOG_LEVEL: "info" -> "debug"',
             '~ services.worker.image: "registry.example.com/worker:1.4" -> '
             '"registry.example.com/worker:1.5"',

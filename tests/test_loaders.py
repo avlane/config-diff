@@ -1,8 +1,9 @@
 import importlib.util
 import unittest
 
-from configdiff.loaders import (ConfigError, detect_format, load_env, load_file, load_ini,
-                                load_json, load_toml, load_yaml)
+from configdiff.loaders import (ConfigError, coerce_scalar, coerce_scalars, detect_format,
+                                load_env, load_file, load_ini, load_json, load_text, load_toml,
+                                load_yaml)
 from tests.helpers import TempDirTestCase
 
 
@@ -120,6 +121,35 @@ class YamlLoaderTests(unittest.TestCase):
     def test_detects_yaml(self):
         self.assertEqual(detect_format("a.yaml"), "yaml")
         self.assertEqual(detect_format("a.yml"), "yaml")
+
+
+class CoerceTests(unittest.TestCase):
+    def test_scalars(self):
+        cases = {"true": True, "False": False, "null": None, "42": 42, "-7": -7, "0": 0,
+                 "3.14": 3.14, "-0.5": -0.5}
+        for text, expected in cases.items():
+            self.assertEqual(coerce_scalar(text), expected, text)
+            self.assertIs(type(coerce_scalar(text)), type(expected), text)
+
+    def test_conservative(self):
+        for text in ("0755", "007", "1e3", "yes", "on", "1.", ".5", "+1", "1_000", "0x10", "",
+                     " 1", "True1", "nUll", "http://x"):
+            self.assertEqual(coerce_scalar(text), text, text)
+
+    def test_non_strings_pass_through(self):
+        self.assertEqual(coerce_scalar(None), None)
+        self.assertEqual(coerce_scalar(5), 5)
+
+    def test_nested(self):
+        self.assertEqual(coerce_scalars({"a": {"b": "1", "c": ["true", "x"]}}),
+                         {"a": {"b": 1, "c": [True, "x"]}})
+
+    def test_only_applies_to_string_only_formats(self):
+        self.assertEqual(load_text("PORT=8080\n", "env", coerce=True), {"PORT": 8080})
+        self.assertEqual(load_text("[a]\nx = false\n", "ini", coerce=True), {"a": {"x": False}})
+        self.assertEqual(load_text('{"a": "1"}', "json", coerce=True), {"a": "1"})
+        self.assertEqual(load_text("a: '1'\n", "yaml", coerce=True), {"a": "1"})
+        self.assertEqual(load_text("PORT=8080\n", "env"), {"PORT": "8080"})
 
 
 class LoadFileTests(TempDirTestCase):

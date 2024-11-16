@@ -15,10 +15,18 @@ _FORMATS = {}
 _EXTENSIONS = {}
 
 
-def register(name, *extensions):
-    """Class decorator-style registration of a loader for format *name*."""
+_STRINGLY = set()  # formats where every value is a string
+
+
+def register(name, *extensions, stringly=False):
+    """Register a loader for format *name* (and file extensions).
+
+    stringly marks formats such as INI and .env that cannot tell 8080 from "8080".
+    """
     def decorate(func):
         _FORMATS[name] = func
+        if stringly:
+            _STRINGLY.add(name)
         for ext in extensions:
             _EXTENSIONS[ext] = name
         return func
@@ -37,7 +45,7 @@ def load_json(text):
         raise ConfigError("invalid JSON: %s" % exc)
 
 
-@register("ini", ".ini", ".cfg")
+@register("ini", ".ini", ".cfg", stringly=True)
 def load_ini(text):
     """Parse INI text into {section: {option: value}}.
 
@@ -57,7 +65,7 @@ _ENV_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*\Z")
 _ENV_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "$": "$"}
 
 
-@register("env", ".env")
+@register("env", ".env", stringly=True)
 def load_env(text):
     """Parse a dotenv file into {NAME: value}.
 
@@ -162,12 +170,51 @@ def detect_format(path):
                           "supported extensions: %s" % (path, ", ".join(sorted(_EXTENSIONS))))
 
 
-def load_text(text, fmt, name="<input>"):
-    """Parse *text* as format *fmt*; errors mention *name*."""
+_COERCE_INT = re.compile(r"-?(?:0|[1-9][0-9]*)\Z")
+_COERCE_FLOAT = re.compile(r"-?(?:0|[1-9][0-9]*)\.[0-9]+\Z")
+
+
+def coerce_scalar(value):
+    """Turn "true", "42" or "1.5" into a bool, int or float; leave other values alone.
+
+    Deliberately conservative: "0755", "1e3", "yes" and "007" stay strings.
+    """
+    if not isinstance(value, str):
+        return value
+    if value in ("true", "True", "TRUE"):
+        return True
+    if value in ("false", "False", "FALSE"):
+        return False
+    if value == "null":
+        return None
+    if _COERCE_INT.match(value):
+        return int(value)
+    if _COERCE_FLOAT.match(value):
+        return float(value)
+    return value
+
+
+def coerce_scalars(data):
+    if isinstance(data, dict):
+        return {k: coerce_scalars(v) for k, v in data.items()}
+    if isinstance(data, list):
+        return [coerce_scalars(v) for v in data]
+    return coerce_scalar(data)
+
+
+def load_text(text, fmt, name="<input>", coerce=False):
+    """Parse *text* as format *fmt*; errors mention *name*.
+
+    With *coerce*, string-only formats (INI, .env) get their numbers and booleans
+    converted so they can be compared with JSON, TOML or YAML.
+    """
     try:
-        return _FORMATS[fmt](text)
+        data = _FORMATS[fmt](text)
     except ConfigError as exc:
         raise ConfigError("%s: %s" % (name, exc))
+    if coerce and fmt in _STRINGLY:
+        data = coerce_scalars(data)
+    return data
 
 
 def read_text(path):
@@ -180,7 +227,7 @@ def read_text(path):
         raise ConfigError("%s is not valid UTF-8: %s" % (path, exc))
 
 
-def load_file(path, fmt=None):
+def load_file(path, fmt=None, coerce=False):
     """Load *path*; the format comes from the extension unless *fmt* is given."""
     fmt = fmt or detect_format(path)
-    return load_text(read_text(path), fmt, path)
+    return load_text(read_text(path), fmt, path, coerce)

@@ -50,3 +50,9 @@ Read one side from standard input with `-` (say which format it is):
 
 Force a format with `-f/--format`, or `--old-format` / `--new-format`; the two
 files do not have to be in the same format.
+## Comparing across formats
+
+INI and `.env` files only have strings. `--coerce` reads `8080`, `1.5`, `true`, `false` and
+`null` in those files as numbers, booleans and null so they can be compared with JSON,
+TOML or YAML: `config-diff .env config.json --coerce`. Values such as `0755` or `1e3` stay
+strings.
