@@ -238,6 +238,14 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 2)
         self.assertIn("a.yaml: invalid or unsupported YAML: line 1", err)
 
+    def test_duplicate_keys_fail_unless_allowed(self):
+        a = self.write("a.env", "PORT=1\nPORT=2\n")
+        b = self.write("b.env", "PORT=2\n")
+        code, _, err = run(a, b)
+        self.assertEqual(code, 2)
+        self.assertIn("PORT is defined twice", err)
+        self.assertEqual(run(a, b, "--allow-duplicates")[0], 0)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

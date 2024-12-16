@@ -123,6 +123,36 @@ class YamlLoaderTests(unittest.TestCase):
         self.assertEqual(detect_format("a.yml"), "yaml")
 
 
+class DuplicateKeyTests(unittest.TestCase):
+    CASES = {
+        "json": '{"a": 1, "b": {"c": 1, "c": 2}}',
+        "env": "A=1\nB=2\nA=3\n",
+        "ini": "[s]\nk = 1\nk = 2\n",
+        "yaml": "a: 1\nb:\n  c: 1\n  c: 2\n",
+    }
+
+    def test_duplicates_are_errors_by_default(self):
+        for fmt, text in self.CASES.items():
+            with self.assertRaises(ConfigError, msg=fmt) as ctx:
+                load_text(text, fmt)
+            self.assertTrue(any(w in str(ctx.exception) for w in ("duplicate", "twice", "already exists")),
+                            (fmt, str(ctx.exception)))
+
+    def test_last_one_wins_when_allowed(self):
+        self.assertEqual(load_text(self.CASES["json"], "json", allow_duplicates=True)["b"], {"c": 2})
+        self.assertEqual(load_text(self.CASES["env"], "env", allow_duplicates=True)["A"], "3")
+        self.assertEqual(load_text(self.CASES["ini"], "ini", allow_duplicates=True), {"s": {"k": "2"}})
+        self.assertEqual(load_text(self.CASES["yaml"], "yaml", allow_duplicates=True)["b"], {"c": 2})
+
+    def test_distinct_keys_in_different_objects_are_fine(self):
+        load_text('{"a": {"x": 1}, "b": {"x": 2}, "l": [{"x": 1}, {"x": 2}]}', "json")
+
+    def test_env_message_names_the_line(self):
+        with self.assertRaises(ConfigError) as ctx:
+            load_env("A=1\nB=2\nA=3\n")
+        self.assertIn("line 3", str(ctx.exception))
+
+
 class CoerceTests(unittest.TestCase):
     def test_scalars(self):
         cases = {"true": True, "False": False, "null": None, "42": 42, "-7": -7, "0": 0,

@@ -56,9 +56,13 @@ _ESCAPES = {
 }
 
 
-def loads(text):
-    """Parse *text* and return dicts, lists and scalars."""
-    return _Parser(text).parse()
+def loads(text, allow_duplicates=False):
+    """Parse *text* and return dicts, lists and scalars.
+
+    Duplicate mapping keys are an error unless *allow_duplicates* is set, in
+    which case the last one wins.
+    """
+    return _Parser(text, allow_duplicates).parse()
 
 
 def _resolve_plain(text):
@@ -86,7 +90,8 @@ def _resolve_plain(text):
 
 
 class _Parser:
-    def __init__(self, text):
+    def __init__(self, text, allow_duplicates=False):
+        self.allow_duplicates = allow_duplicates
         if text.startswith("\ufeff"):
             text = text[1:]
         self.raw = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -172,7 +177,7 @@ class _Parser:
             if key == "<<":
                 raise YamlSubsetError("merge keys (<<) are not supported", line.no)
             self._advance()
-            if key in result:
+            if key in result and not self.allow_duplicates:
                 raise YamlSubsetError("duplicate key %r" % key, line.no)
             result[key] = self._parse_value(rest, line, indent)
         return result
@@ -373,7 +378,7 @@ class _Parser:
             if i < len(text) and text[i] == ":":
                 value, i = self._parse_flow(text, i + 1, number)
                 i = self._skip_spaces(text, i)
-            if key in result:
+            if key in result and not self.allow_duplicates:
                 raise YamlSubsetError("duplicate key %r" % key, number)
             result[key] = value
             if i < len(text) and text[i] == ",":

@@ -50,6 +50,8 @@ def build_parser():
     parser.add_argument("--coerce", action="store_true",
                         help="read numbers and true/false in INI and .env files as such, so "
                              "PORT=8080 equals {\"PORT\": 8080}")
+    parser.add_argument("--allow-duplicates", action="store_true",
+                        help="accept repeated keys (the last one wins) instead of failing")
     parser.add_argument("-i", "--ignore", action="append", default=[], metavar="PATH",
                         help="do not compare PATH, e.g. 'server.port', 'users[*].email' or "
                              "'**.password' (repeatable)")
@@ -75,14 +77,14 @@ def build_parser():
     return parser
 
 
-def load_source(path, fmt, stdin, coerce=False):
+def load_source(path, fmt, stdin, coerce=False, allow_duplicates=False):
     """Load a file, or standard input when *path* is "-"."""
     if path != "-":
-        return load_file(path, None if fmt == "auto" else fmt, coerce)
+        return load_file(path, None if fmt == "auto" else fmt, coerce, allow_duplicates)
     if fmt == "auto":
         raise ConfigError("standard input has no file name: say which format it is with "
                           "--format (or --old-format / --new-format)")
-    return load_text(stdin.read(), fmt, "<stdin>", coerce)
+    return load_text(stdin.read(), fmt, "<stdin>", coerce, allow_duplicates)
 
 
 def main(argv=None, stdout=None, stderr=None, stdin=None):
@@ -107,8 +109,10 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
     if args.old == "-" and args.new == "-":
         parser.error("only one of OLD and NEW can be read from standard input")
     try:
-        old = load_source(args.old, args.old_format or args.format, stdin, args.coerce)
-        new = load_source(args.new, args.new_format or args.format, stdin, args.coerce)
+        old = load_source(args.old, args.old_format or args.format, stdin, args.coerce,
+                          args.allow_duplicates)
+        new = load_source(args.new, args.new_format or args.format, stdin, args.coerce,
+                          args.allow_duplicates)
     except ConfigError as exc:
         stderr.write("config-diff: error: %s\n" % exc)
         return EXIT_ERROR

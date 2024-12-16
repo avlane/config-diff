@@ -37,22 +37,33 @@ def supported_formats():
     return sorted(_FORMATS)
 
 
+def _reject_duplicate_keys(pairs):
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ConfigError("duplicate key %r" % key)
+        result[key] = value
+    return result
+
+
 @register("json", ".json")
-def load_json(text):
+def load_json(text, allow_duplicates=False):
     try:
-        return json.loads(text)
+        return json.loads(text, object_pairs_hook=None if allow_duplicates
+                          else _reject_duplicate_keys)
     except json.JSONDecodeError as exc:
         raise ConfigError("invalid JSON: %s" % exc)
 
 
 @register("ini", ".ini", ".cfg", stringly=True)
-def load_ini(text):
+def load_ini(text, allow_duplicates=False):
     """Parse INI text into {section: {option: value}}.
 
     Option names keep their case (configparser lower-cases them by default),
     "%" is not special, and options without a value are None.
     """
-    parser = configparser.ConfigParser(interpolation=None, allow_no_value=True, strict=True)
+    parser = configparser.ConfigParser(interpolation=None, allow_no_value=True,
+                                       strict=not allow_duplicates)
     parser.optionxform = str
     try:
         parser.read_string(text)
@@ -66,7 +77,7 @@ _ENV_ESCAPES = {"n": "\n", "t": "\t", "r": "\r", '"': '"', "\\": "\\", "$": "$"}
 
 
 @register("env", ".env", stringly=True)
-def load_env(text):
+def load_env(text, allow_duplicates=False):
     """Parse a dotenv file into {NAME: value}.
 
     Supports "export NAME=value", comments, single-quoted values (literal),
@@ -102,6 +113,8 @@ def load_env(text):
             value = rest[1:end]
         else:
             value = re.split(r"\s+#", rest, maxsplit=1)[0].rstrip()
+        if name in result and not allow_duplicates:
+            raise ConfigError("invalid .env: line %d: %s is defined twice" % (number, name))
         result[name] = value
     return result
 
@@ -136,17 +149,17 @@ def _only_comment_after(rest, number):
 
 
 @register("yaml", ".yaml", ".yml")
-def load_yaml(text):
+def load_yaml(text, allow_duplicates=False):
     """Parse the supported subset of YAML (see configdiff.yamlsubset)."""
     from . import yamlsubset
     try:
-        return yamlsubset.loads(text)
+        return yamlsubset.loads(text, allow_duplicates)
     except yamlsubset.YamlSubsetError as exc:
         raise ConfigError("invalid or unsupported YAML: %s" % exc)
 
 
 @register("toml", ".toml")
-def load_toml(text):
+def load_toml(text, allow_duplicates=False):
     """Parse TOML with the standard library (Python 3.11+)."""
     try:
         import tomllib
@@ -202,14 +215,14 @@ def coerce_scalars(data):
     return coerce_scalar(data)
 
 
-def load_text(text, fmt, name="<input>", coerce=False):
+def load_text(text, fmt, name="<input>", coerce=False, allow_duplicates=False):
     """Parse *text* as format *fmt*; errors mention *name*.
 
     With *coerce*, string-only formats (INI, .env) get their numbers and booleans
     converted so they can be compared with JSON, TOML or YAML.
     """
     try:
-        data = _FORMATS[fmt](text)
+        data = _FORMATS[fmt](text, allow_duplicates)
     except ConfigError as exc:
         raise ConfigError("%s: %s" % (name, exc))
     if coerce and fmt in _STRINGLY:
@@ -227,7 +240,7 @@ def read_text(path):
         raise ConfigError("%s is not valid UTF-8: %s" % (path, exc))
 
 
-def load_file(path, fmt=None, coerce=False):
+def load_file(path, fmt=None, coerce=False, allow_duplicates=False):
     """Load *path*; the format comes from the extension unless *fmt* is given."""
     fmt = fmt or detect_format(path)
-    return load_text(read_text(path), fmt, path, coerce)
+    return load_text(read_text(path), fmt, path, coerce, allow_duplicates)
