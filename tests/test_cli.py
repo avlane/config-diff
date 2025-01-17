@@ -246,6 +246,17 @@ class CliTests(TempDirTestCase):
         self.assertIn("PORT is defined twice", err)
         self.assertEqual(run(a, b, "--allow-duplicates")[0], 0)
 
+    def test_ignore_file(self):
+        ignore = self.write("ignore.txt", "# noise\nversion\n**.workers\n\ndatabase\n")
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "--ignore-file", ignore)
+        self.assertEqual((code, out), (1, '+ features[2]: "audit"\n'))
+
+    def test_unreadable_ignore_file_is_a_usage_error(self):
+        code, _, err = run(fixture("app_old.json"), fixture("app_new.json"),
+                           "--ignore-file", self.tmp + "/nope.txt")
+        self.assertEqual(code, 2)
+        self.assertIn("cannot read ignore file", err)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

@@ -60,6 +60,17 @@ class PatternError(ValueError):
     pass
 
 
+def read_pattern_file(path):
+    """Read path patterns from a file: one per line, "#" starts a comment."""
+    patterns = []
+    with open(path, encoding="utf-8") as handle:
+        for line in handle:
+            line = line.strip()
+            if line and not line.startswith("#"):
+                patterns.append(line)
+    return patterns
+
+
 class _Token:
     """One step of a pattern. kind is key, index, any, anyindex or deep."""
 

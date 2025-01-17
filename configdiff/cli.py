@@ -8,7 +8,7 @@ import sys
 from . import __version__
 from .diffing import Options, diff
 from .loaders import ConfigError, load_file, load_text, supported_formats
-from .paths import PatternError, parse_pattern
+from .paths import PatternError, parse_pattern, read_pattern_file
 from .redact import redact_changes, secret_patterns
 from .render import render_json, render_plain
 
@@ -55,6 +55,8 @@ def build_parser():
     parser.add_argument("-i", "--ignore", action="append", default=[], metavar="PATH",
                         help="do not compare PATH, e.g. 'server.port', 'users[*].email' or "
                              "'**.password' (repeatable)")
+    parser.add_argument("--ignore-file", action="append", default=[], metavar="FILE",
+                        help="read paths to ignore from FILE, one per line (# starts a comment)")
     parser.add_argument("-k", "--list-key", action="append", default=[], metavar="PATH=FIELD",
                         help="compare the list at PATH by each item's FIELD instead of by "
                              "position, e.g. 'servers=name' (repeatable)")
@@ -93,8 +95,14 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
     stdin = stdin or sys.stdin
     parser = build_parser()
     args = parser.parse_args(argv)
+    ignored = list(args.ignore)
+    for name in args.ignore_file:
+        try:
+            ignored.extend(read_pattern_file(name))
+        except OSError as exc:
+            parser.error("cannot read ignore file %s: %s" % (name, exc.strerror or exc))
     try:
-        options = Options(ignore=[parse_pattern(p) for p in args.ignore],
+        options = Options(ignore=[parse_pattern(p) for p in ignored],
                           list_keys=[_list_key(spec) for spec in args.list_key],
                           unordered=[parse_pattern(p) for p in
                                      (["**"] if args.unordered_lists else args.unordered)])

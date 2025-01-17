@@ -1,6 +1,8 @@
 import unittest
 
-from configdiff.paths import Item, PatternError, format_path, parse_pattern
+from configdiff.paths import (Item, PatternError, format_path, parse_pattern,
+                              read_pattern_file)
+from tests.helpers import TempDirTestCase
 
 
 class FormatPathTests(unittest.TestCase):
@@ -106,6 +108,12 @@ class PatternTests(unittest.TestCase):
         for bad in ("", "...", "a[", "a[x]", 'a["b', "a[1"):
             with self.assertRaises(PatternError, msg=bad):
                 parse_pattern(bad)
+
+
+class PatternFileTests(TempDirTestCase):
+    def test_comments_and_blank_lines_are_skipped(self):
+        path = self.write("ignore.txt", "# generated at deploy time\n\nbuild.number\n  **.token  \n# **.x\n")
+        self.assertEqual(read_pattern_file(path), ["build.number", "**.token"])
 
 
 if __name__ == "__main__":

@@ -56,3 +56,5 @@ INI and `.env` files only have strings. `--coerce` reads `8080`, `1.5`, `true`, 
 `null` in those files as numbers, booleans and null so they can be compared with JSON,
 TOML or YAML: `config-diff .env config.json --coerce`. Values such as `0755` or `1e3` stay
 strings.
+Keep a team-wide list of noisy paths in a file and pass it with `--ignore-file ignore.txt`
+(one pattern per line, `#` for comments).
