@@ -257,6 +257,26 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 2)
         self.assertIn("cannot read ignore file", err)
 
+    def test_summary(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "--summary")
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines()[-1], "5 differences (2 added, 3 changed)")
+        code, out, _ = run(fixture("app_old.json"), fixture("app_old.json"), "--summary")
+        self.assertEqual((code, out), (0, "No differences.\n"))
+
+    def test_quiet(self):
+        code, out, err = run(fixture("app_old.json"), fixture("app_new.json"), "-q")
+        self.assertEqual((code, out, err), (1, "", ""))
+        self.assertEqual(run(fixture("app_old.json"), fixture("app_old.json"), "--quiet")[:2], (0, ""))
+
+    def test_quiet_still_reports_errors(self):
+        code, _, err = run(fixture("app_old.json"), self.tmp + "/missing.json", "-q")
+        self.assertEqual(code, 2)
+        self.assertIn("cannot read", err)
+
+    def test_quiet_and_summary_conflict(self):
+        self.assertEqual(run(fixture("app_old.json"), fixture("app_old.json"), "-q", "--summary")[0], 2)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

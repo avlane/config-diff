@@ -3,7 +3,7 @@ import unittest
 from configdiff.diffing import ADDED, CHANGED, REMOVED, Change
 import json
 
-from configdiff.render import format_value, render_json, render_plain
+from configdiff.render import format_value, render_json, render_plain, summary_line
 
 
 class RenderPlainTests(unittest.TestCase):
@@ -25,6 +25,17 @@ class RenderPlainTests(unittest.TestCase):
     def test_none_and_bools(self):
         self.assertEqual(format_value(None), "null")
         self.assertEqual(format_value(True), "true")
+
+
+class SummaryLineTests(unittest.TestCase):
+    def test_no_changes(self):
+        self.assertEqual(summary_line([]), "No differences.")
+
+    def test_singular_and_plural(self):
+        self.assertEqual(summary_line([Change(ADDED, ("a",), new=1)]), "1 difference (1 added)")
+        changes = [Change(ADDED, ("a",), new=1), Change(CHANGED, ("b",), 1, 2),
+                   Change(CHANGED, ("c",), 1, 2)]
+        self.assertEqual(summary_line(changes), "3 differences (1 added, 2 changed)")
 
 
 class RenderColorTests(unittest.TestCase):

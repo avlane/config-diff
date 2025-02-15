@@ -24,6 +24,16 @@ def summarize(changes):
     return counts
 
 
+def summary_line(changes):
+    """"3 differences (1 added, 2 changed)" or "No differences."."""
+    if not changes:
+        return "No differences."
+    counts = summarize(changes)
+    parts = ["%d %s" % (n, kind) for kind, n in counts.items() if n]
+    return "%d difference%s (%s)" % (len(changes), "" if len(changes) == 1 else "s",
+                                     ", ".join(parts))
+
+
 def _segment_json(segment):
     if isinstance(segment, Item):
         return {"item": {segment.field: segment.value}}

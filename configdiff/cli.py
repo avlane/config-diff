@@ -10,7 +10,7 @@ from .diffing import Options, diff
 from .loaders import ConfigError, load_file, load_text, supported_formats
 from .paths import PatternError, parse_pattern, read_pattern_file
 from .redact import redact_changes, secret_patterns
-from .render import render_json, render_plain
+from .render import render_json, render_plain, summary_line
 
 RENDERERS = {"plain": render_plain, "json": render_json}
 COLOR_MODES = ("auto", "always", "never")
@@ -72,6 +72,11 @@ def build_parser():
                              "api_key... and passwords inside URLs")
     parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
                         help="how to print the differences (default: plain)")
+    verbosity = parser.add_mutually_exclusive_group()
+    verbosity.add_argument("--summary", action="store_true",
+                           help="end plain output with a count of the differences")
+    verbosity.add_argument("-q", "--quiet", action="store_true",
+                           help="print nothing; the exit status tells the result")
     parser.add_argument("--color", choices=COLOR_MODES, default="auto",
                         help="colorize plain output (default: auto = only on a terminal "
                              "and when NO_COLOR is not set)")
@@ -127,8 +132,12 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
     changes = diff(old, new, options)
     if redactions or args.redact_secrets:
         changes = redact_changes(changes, redactions, mask_urls=args.redact_secrets)
-    if args.output == "plain":
+    if args.quiet:
+        pass
+    elif args.output == "plain":
         stdout.write(render_plain(changes, use_color(args.color, stdout, os.environ)))
+        if args.summary:
+            stdout.write(summary_line(changes) + "\n")
     else:
         stdout.write(RENDERERS[args.output](changes))
     return EXIT_DIFFERENT if changes else EXIT_SAME
