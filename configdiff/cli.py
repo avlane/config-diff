@@ -6,7 +6,7 @@ import os
 import sys
 
 from . import __version__
-from .diffing import Options, diff
+from .diffing import ADDED, CHANGED, REMOVED, Options, diff
 from .loaders import ConfigError, load_file, load_text, supported_formats
 from .paths import PatternError, parse_pattern, read_pattern_file
 from .redact import redact_changes, secret_patterns
@@ -27,6 +27,17 @@ def use_color(mode, stream, environ):
     if mode == "never" or environ.get("NO_COLOR"):
         return False
     return hasattr(stream, "isatty") and stream.isatty()
+
+
+def _fail_on(text):
+    kinds = [part.strip() for part in text.split(",") if part.strip()]
+    for kind in kinds:
+        if kind not in (ADDED, REMOVED, CHANGED):
+            raise argparse.ArgumentTypeError(
+                "unknown kind %r (use added, removed and/or changed)" % kind)
+    if not kinds:
+        raise argparse.ArgumentTypeError("expected at least one of added, removed, changed")
+    return frozenset(kinds)
 
 
 def _list_key(spec):
@@ -72,6 +83,11 @@ def build_parser():
                              "api_key... and passwords inside URLs")
     parser.add_argument("-o", "--output", choices=sorted(RENDERERS), default="plain",
                         help="how to print the differences (default: plain)")
+    parser.add_argument("--fail-on", type=_fail_on, default=frozenset((ADDED, REMOVED, CHANGED)),
+                        metavar="KINDS",
+                        help="comma-separated kinds of difference that make the exit status 1: "
+                             "added, removed, changed (default: all). Other differences are "
+                             "still printed.")
     verbosity = parser.add_mutually_exclusive_group()
     verbosity.add_argument("--summary", action="store_true",
                            help="end plain output with a count of the differences")
@@ -140,7 +156,8 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
             stdout.write(summary_line(changes) + "\n")
     else:
         stdout.write(RENDERERS[args.output](changes))
-    return EXIT_DIFFERENT if changes else EXIT_SAME
+    failing = any(c.kind in args.fail_on for c in changes)
+    return EXIT_DIFFERENT if failing else EXIT_SAME
 
 
 if __name__ == "__main__":

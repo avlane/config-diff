@@ -58,3 +58,13 @@ TOML or YAML: `config-diff .env config.json --coerce`. Values such as `0755` or 
 strings.
 Keep a team-wide list of noisy paths in a file and pass it with `--ignore-file ignore.txt`
 (one pattern per line, `#` for comments).
+## Exit status
+
+| code | meaning |
+| --- | --- |
+| 0 | no differences (or only kinds not listed in `--fail-on`) |
+| 1 | differences |
+| 2 | usage error, unreadable or invalid input |
+
+`--fail-on removed,changed` lets a CI job accept new keys but fail when keys disappear or
+change; additions are still printed.

@@ -277,6 +277,22 @@ class CliTests(TempDirTestCase):
     def test_quiet_and_summary_conflict(self):
         self.assertEqual(run(fixture("app_old.json"), fixture("app_old.json"), "-q", "--summary")[0], 2)
 
+    def test_fail_on_limits_which_differences_fail_the_run(self):
+        a = self.write("a.json", '{"keep": 1, "gone": 2, "edit": 3}')
+        b = self.write("b.json", '{"keep": 1, "edit": 4, "new": 5}')
+        self.assertEqual(run(a, b)[0], 1)
+        self.assertEqual(run(a, b, "--fail-on", "removed")[0], 1)
+        self.assertEqual(run(a, b, "--fail-on", "added,changed")[0], 1)
+        c = self.write("c.json", '{"keep": 1, "gone": 2, "edit": 3, "new": 5}')
+        code, out, _ = run(a, c, "--fail-on", "removed,changed")
+        self.assertEqual((code, out), (0, '+ new: 5\n'))  # only an addition: printed, but passes
+        self.assertEqual(run(a, c, "--fail-on", "added")[0], 1)
+
+    def test_fail_on_validation(self):
+        for bad in ("modified", "", "added,,bogus"):
+            code, _, err = run(fixture("app_old.json"), fixture("app_old.json"), "--fail-on", bad)
+            self.assertEqual(code, 2, bad)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))
