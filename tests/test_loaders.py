@@ -1,7 +1,7 @@
 import importlib.util
 import unittest
 
-from configdiff.loaders import (ConfigError, coerce_scalar, coerce_scalars, detect_format,
+from configdiff.loaders import (ConfigError, LoadOptions, coerce_scalar, coerce_scalars, detect_format,
                                 load_env, load_file, load_ini, load_json, load_text, load_toml,
                                 load_yaml)
 from tests.helpers import TempDirTestCase
@@ -139,10 +139,10 @@ class DuplicateKeyTests(unittest.TestCase):
                             (fmt, str(ctx.exception)))
 
     def test_last_one_wins_when_allowed(self):
-        self.assertEqual(load_text(self.CASES["json"], "json", allow_duplicates=True)["b"], {"c": 2})
-        self.assertEqual(load_text(self.CASES["env"], "env", allow_duplicates=True)["A"], "3")
-        self.assertEqual(load_text(self.CASES["ini"], "ini", allow_duplicates=True), {"s": {"k": "2"}})
-        self.assertEqual(load_text(self.CASES["yaml"], "yaml", allow_duplicates=True)["b"], {"c": 2})
+        self.assertEqual(load_text(self.CASES["json"], "json", options=LoadOptions(allow_duplicates=True))["b"], {"c": 2})
+        self.assertEqual(load_text(self.CASES["env"], "env", options=LoadOptions(allow_duplicates=True))["A"], "3")
+        self.assertEqual(load_text(self.CASES["ini"], "ini", options=LoadOptions(allow_duplicates=True)), {"s": {"k": "2"}})
+        self.assertEqual(load_text(self.CASES["yaml"], "yaml", options=LoadOptions(allow_duplicates=True))["b"], {"c": 2})
 
     def test_distinct_keys_in_different_objects_are_fine(self):
         load_text('{"a": {"x": 1}, "b": {"x": 2}, "l": [{"x": 1}, {"x": 2}]}', "json")
@@ -175,10 +175,10 @@ class CoerceTests(unittest.TestCase):
                          {"a": {"b": 1, "c": [True, "x"]}})
 
     def test_only_applies_to_string_only_formats(self):
-        self.assertEqual(load_text("PORT=8080\n", "env", coerce=True), {"PORT": 8080})
-        self.assertEqual(load_text("[a]\nx = false\n", "ini", coerce=True), {"a": {"x": False}})
-        self.assertEqual(load_text('{"a": "1"}', "json", coerce=True), {"a": "1"})
-        self.assertEqual(load_text("a: '1'\n", "yaml", coerce=True), {"a": "1"})
+        self.assertEqual(load_text("PORT=8080\n", "env", options=LoadOptions(coerce=True)), {"PORT": 8080})
+        self.assertEqual(load_text("[a]\nx = false\n", "ini", options=LoadOptions(coerce=True)), {"a": {"x": False}})
+        self.assertEqual(load_text('{"a": "1"}', "json", options=LoadOptions(coerce=True)), {"a": "1"})
+        self.assertEqual(load_text("a: '1'\n", "yaml", options=LoadOptions(coerce=True)), {"a": "1"})
         self.assertEqual(load_text("PORT=8080\n", "env"), {"PORT": "8080"})
 
 

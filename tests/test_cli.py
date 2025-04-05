@@ -293,6 +293,58 @@ class CliTests(TempDirTestCase):
             code, _, err = run(fixture("app_old.json"), fixture("app_old.json"), "--fail-on", bad)
             self.assertEqual(code, 2, bad)
 
+    def test_directories(self):
+        code, out, _ = run(fixture("envs/old"), fixture("envs/new"))
+        self.assertEqual(code, 1)
+        self.assertEqual(out.splitlines(), [
+            "+ only in new: added.ini",
+            "=== app.json ===",
+            "~ replicas: 2 -> 3",
+            "=== nested/cache.yaml ===",
+            "~ ttl: 300 -> 600",
+            "- only in old: removed.toml",
+        ])
+
+    def test_directory_summary_and_json(self):
+        _, out, _ = run(fixture("envs/old"), fixture("envs/new"), "--summary")
+        self.assertEqual(out.splitlines()[-1], "4 of 5 files differ (2 changed, 1 only in old, 1 only in new)")
+        _, out, _ = run(fixture("envs/old"), fixture("envs/new"), "-o", "json")
+        doc = json.loads(out)
+        self.assertFalse(doc["equal"])
+        self.assertEqual(doc["summary"], {"only-new": 1, "different": 2, "same": 1, "only-old": 1})
+        by_name = {f["name"]: f for f in doc["files"]}
+        self.assertEqual(by_name["app.json"]["summary"], {"added": 0, "removed": 0, "changed": 1})
+        self.assertEqual(by_name["db.env"]["status"], "same")
+
+    def test_identical_directories(self):
+        code, out, _ = run(fixture("envs/old"), fixture("envs/old"), "--summary")
+        self.assertEqual((code, out), (0, "No differences in 4 files.\n"))
+
+    def test_ignore_and_fail_on_apply_to_every_file(self):
+        code, out, _ = run(fixture("envs/old"), fixture("envs/new"), "-i", "replicas", "-i", "ttl")
+        self.assertEqual(out.splitlines(), ["+ only in new: added.ini", "- only in old: removed.toml"])
+        self.assertEqual(code, 1)
+        self.assertEqual(run(fixture("envs/old"), fixture("envs/new"), "-i", "replicas", "-i", "ttl",
+                             "--fail-on", "changed")[0], 0)
+
+    def test_directory_against_file_is_a_usage_error(self):
+        code, _, err = run(fixture("envs/old"), fixture("app_old.json"))
+        self.assertEqual(code, 2)
+        self.assertIn("both be directories", err)
+
+    def test_format_cannot_be_forced_for_directories(self):
+        code, _, err = run(fixture("envs/old"), fixture("envs/new"), "-f", "json")
+        self.assertEqual(code, 2)
+        self.assertIn("--format cannot be used", err)
+
+    def test_errors_in_one_file_name_it(self):
+        old, new = self.tmp + "/old", self.tmp + "/new"
+        self.write("old/a.json", "{}")
+        self.write("new/a.json", "{")
+        code, _, err = run(old, new)
+        self.assertEqual(code, 2)
+        self.assertIn("a.json: invalid JSON", err)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

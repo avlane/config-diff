@@ -64,6 +64,38 @@ def render_json(changes):
     return json.dumps(document, indent=2, ensure_ascii=False, default=_json_default) + "\n"
 
 
+def _status_counts(results):
+    counts = {}
+    for result in results:
+        counts[result.status] = counts.get(result.status, 0) + 1
+    return counts
+
+
+def directory_summary_line(results):
+    counts = _status_counts(results)
+    differing = counts.get("different", 0) + counts.get("only-old", 0) + counts.get("only-new", 0)
+    if not differing:
+        return "No differences in %d file%s." % (len(results), "" if len(results) == 1 else "s")
+    parts = ["%d %s" % (counts[s], label) for s, label in
+             (("different", "changed"), ("only-old", "only in old"), ("only-new", "only in new"))
+             if counts.get(s)]
+    return "%d of %d files differ (%s)" % (differing, len(results), ", ".join(parts))
+
+
+def render_directory_json(results):
+    document = {
+        "equal": all(r.status == "same" for r in results),
+        "summary": _status_counts(results),
+        "files": [{
+            "name": r.name,
+            "status": r.status,
+            "summary": summarize(r.changes),
+            "changes": [change_to_dict(c) for c in r.changes],
+        } for r in results],
+    }
+    return json.dumps(document, indent=2, ensure_ascii=False, default=_json_default) + "\n"
+
+
 _RESET = "\x1b[0m"
 _COLORS = {"green": "\x1b[32m", "red": "\x1b[31m", "yellow": "\x1b[33m", "bold": "\x1b[1m"}
 
@@ -87,3 +119,18 @@ def render_plain(changes, color=False):
                 _paint(format_value(change.old), "red", color),
                 _paint(format_value(change.new), "green", color)))
     return "".join(line + "\n" for line in lines)
+
+def render_directory_plain(results, color=False):
+    """Per file: a "=== name ===" header and its changes, or an "Only in" line."""
+    out = []
+    for result in results:
+        if result.status == "same":
+            continue
+        if result.status == "only-old":
+            out.append(_paint("- only in old: %s" % result.name, "red", color) + "\n")
+        elif result.status == "only-new":
+            out.append(_paint("+ only in new: %s" % result.name, "green", color) + "\n")
+        else:
+            out.append(_paint("=== %s ===" % result.name, "bold", color) + "\n")
+            out.append(render_plain(result.changes, color))
+    return "".join(out)

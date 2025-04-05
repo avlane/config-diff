@@ -6,13 +6,16 @@ import os
 import sys
 
 from . import __version__
+from .dirdiff import DIFFERENT, ONLY_NEW, ONLY_OLD, compare_dirs
 from .diffing import ADDED, CHANGED, REMOVED, Options, diff
-from .loaders import ConfigError, load_file, load_text, supported_formats
+from .loaders import ConfigError, LoadOptions, load_file, load_text, supported_formats
 from .paths import PatternError, parse_pattern, read_pattern_file
 from .redact import redact_changes, secret_patterns
-from .render import render_json, render_plain, summary_line
+from .render import (directory_summary_line, render_directory_json, render_directory_plain,
+                     render_json, render_plain, summary_line)
 
 RENDERERS = {"plain": render_plain, "json": render_json}
+DIRECTORY_RENDERERS = {"json": render_directory_json}
 COLOR_MODES = ("auto", "always", "never")
 
 EXIT_SAME = 0
@@ -50,9 +53,11 @@ def _list_key(spec):
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="config-diff",
-        description="Semantic diff of two configuration files.")
-    parser.add_argument("old", metavar="OLD", help="the original file, or - for standard input")
-    parser.add_argument("new", metavar="NEW", help="the changed file, or - for standard input")
+        description="Semantic diff of two configuration files, or of two directories of them.")
+    parser.add_argument("old", metavar="OLD",
+                        help="the original file or directory, or - for standard input")
+    parser.add_argument("new", metavar="NEW",
+                        help="the changed file or directory, or - for standard input")
     formats = ("auto",) + tuple(supported_formats())
     parser.add_argument("-f", "--format", choices=formats, default="auto",
                         help="input format of both files (default: from the extension)")
@@ -100,14 +105,18 @@ def build_parser():
     return parser
 
 
-def load_source(path, fmt, stdin, coerce=False, allow_duplicates=False):
+def load_source(path, fmt, stdin, options):
     """Load a file, or standard input when *path* is "-"."""
     if path != "-":
-        return load_file(path, None if fmt == "auto" else fmt, coerce, allow_duplicates)
+        return load_file(path, None if fmt == "auto" else fmt, options)
     if fmt == "auto":
         raise ConfigError("standard input has no file name: say which format it is with "
                           "--format (or --old-format / --new-format)")
-    return load_text(stdin.read(), fmt, "<stdin>", coerce, allow_duplicates)
+    return load_text(stdin.read(), fmt, "<stdin>", options)
+
+
+def _failing(args, changes):
+    return any(c.kind in args.fail_on for c in changes)
 
 
 def main(argv=None, stdout=None, stderr=None, stdin=None):
@@ -116,6 +125,7 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
     stdin = stdin or sys.stdin
     parser = build_parser()
     args = parser.parse_args(argv)
+
     ignored = list(args.ignore)
     for name in args.ignore_file:
         try:
@@ -127,9 +137,6 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
                           list_keys=[_list_key(spec) for spec in args.list_key],
                           unordered=[parse_pattern(p) for p in
                                      (["**"] if args.unordered_lists else args.unordered)])
-    except PatternError as exc:
-        parser.error(str(exc))
-    try:
         redactions = [parse_pattern(p) for p in args.redact]
     except PatternError as exc:
         parser.error(str(exc))
@@ -137,26 +144,64 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
         redactions += secret_patterns()
     if args.old == "-" and args.new == "-":
         parser.error("only one of OLD and NEW can be read from standard input")
+    load_options = LoadOptions(coerce=args.coerce, allow_duplicates=args.allow_duplicates)
+
+    def compare(old, new):
+        changes = diff(old, new, options)
+        if redactions:
+            changes = redact_changes(changes, redactions, mask_urls=args.redact_secrets)
+        return changes
+
+    color = use_color(args.color, stdout, os.environ)
     try:
-        old = load_source(args.old, args.old_format or args.format, stdin, args.coerce,
-                          args.allow_duplicates)
-        new = load_source(args.new, args.new_format or args.format, stdin, args.coerce,
-                          args.allow_duplicates)
+        if os.path.isdir(args.old) or os.path.isdir(args.new):
+            return _compare_directories(parser, args, load_options, compare, stdout, color)
+        old = load_source(args.old, args.old_format or args.format, stdin, load_options)
+        new = load_source(args.new, args.new_format or args.format, stdin, load_options)
     except ConfigError as exc:
         stderr.write("config-diff: error: %s\n" % exc)
         return EXIT_ERROR
-    changes = diff(old, new, options)
-    if redactions or args.redact_secrets:
-        changes = redact_changes(changes, redactions, mask_urls=args.redact_secrets)
+
+    changes = compare(old, new)
     if args.quiet:
         pass
     elif args.output == "plain":
-        stdout.write(render_plain(changes, use_color(args.color, stdout, os.environ)))
+        stdout.write(render_plain(changes, color))
         if args.summary:
             stdout.write(summary_line(changes) + "\n")
     else:
         stdout.write(RENDERERS[args.output](changes))
-    failing = any(c.kind in args.fail_on for c in changes)
+    return EXIT_DIFFERENT if _failing(args, changes) else EXIT_SAME
+
+
+def _compare_directories(parser, args, load_options, compare, stdout, color):
+    if not (os.path.isdir(args.old) and os.path.isdir(args.new)):
+        parser.error("OLD and NEW must both be directories or both be files")
+    if any(f not in (None, "auto") for f in (args.format, args.old_format, args.new_format)):
+        parser.error("--format cannot be used when comparing directories: "
+                     "files are recognised by their extension")
+
+    def compare_files(old_path, new_path):
+        return compare(load_file(old_path, None, load_options),
+                       load_file(new_path, None, load_options))
+
+    results = compare_dirs(args.old, args.new, compare_files)
+    if args.quiet:
+        pass
+    elif args.output == "plain":
+        stdout.write(render_directory_plain(results, color))
+        if args.summary:
+            stdout.write(directory_summary_line(results) + "\n")
+    else:
+        stdout.write(DIRECTORY_RENDERERS[args.output](results))
+    failing = False
+    for result in results:
+        if result.status == ONLY_OLD:
+            failing = failing or REMOVED in args.fail_on
+        elif result.status == ONLY_NEW:
+            failing = failing or ADDED in args.fail_on
+        elif result.status == DIFFERENT:
+            failing = failing or _failing(args, result.changes)
     return EXIT_DIFFERENT if failing else EXIT_SAME
 
 

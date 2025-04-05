@@ -5,6 +5,7 @@ import configparser
 import json
 import os
 import re
+from dataclasses import dataclass
 
 
 class ConfigError(Exception):
@@ -215,17 +216,25 @@ def coerce_scalars(data):
     return coerce_scalar(data)
 
 
-def load_text(text, fmt, name="<input>", coerce=False, allow_duplicates=False):
-    """Parse *text* as format *fmt*; errors mention *name*.
+@dataclass(frozen=True)
+class LoadOptions:
+    """How files are read; the same options apply to every file of a run.
 
-    With *coerce*, string-only formats (INI, .env) get their numbers and booleans
-    converted so they can be compared with JSON, TOML or YAML.
+    coerce: read numbers and true/false in string-only formats (INI, .env) as such.
+    allow_duplicates: accept repeated keys, the last one wins.
     """
+    coerce: bool = False
+    allow_duplicates: bool = False
+
+
+def load_text(text, fmt, name="<input>", options=None):
+    """Parse *text* as format *fmt*; errors mention *name*."""
+    options = options or LoadOptions()
     try:
-        data = _FORMATS[fmt](text, allow_duplicates)
+        data = _FORMATS[fmt](text, options.allow_duplicates)
     except ConfigError as exc:
         raise ConfigError("%s: %s" % (name, exc))
-    if coerce and fmt in _STRINGLY:
+    if options.coerce and fmt in _STRINGLY:
         data = coerce_scalars(data)
     return data
 
@@ -240,7 +249,7 @@ def read_text(path):
         raise ConfigError("%s is not valid UTF-8: %s" % (path, exc))
 
 
-def load_file(path, fmt=None, coerce=False, allow_duplicates=False):
+def load_file(path, fmt=None, options=None):
     """Load *path*; the format comes from the extension unless *fmt* is given."""
     fmt = fmt or detect_format(path)
-    return load_text(read_text(path), fmt, path, coerce, allow_duplicates)
+    return load_text(read_text(path), fmt, path, options)

@@ -68,3 +68,17 @@ Keep a team-wide list of noisy paths in a file and pass it with `--ignore-file i
 
 `--fail-on removed,changed` lets a CI job accept new keys but fail when keys disappear or
 change; additions are still printed.
+## Directories
+
+Pass two directories to compare the files that have the same relative name (files whose
+format is recognised from the extension; others are skipped). Files present on one side only
+are reported too:
+
+    $ config-diff config/staging config/prod --summary
+    + only in new: metrics.toml
+    === app.yaml ===
+    ~ replicas: 2 -> 5
+    - only in old: debug.env
+    3 of 12 files differ (1 changed, 1 only in old, 1 only in new)
+
+Every option (`--ignore`, `--list-key`, `--redact-secrets`, `--fail-on`, ...) applies to all files.

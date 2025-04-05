@@ -1,0 +1,1 @@
+{"name": "app", "replicas": 2, "limits": {"cpu": "500m"}}
