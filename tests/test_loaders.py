@@ -35,6 +35,17 @@ class IniTests(unittest.TestCase):
     def test_comments_are_ignored(self):
         self.assertEqual(load_ini("# c\n; c\n[a]\n# c\nx = 1\n"), {"a": {"x": "1"}})
 
+    def test_default_section_is_not_copied_into_every_section(self):
+        text = "[DEFAULT]\nretries = 3\ntimeout = 10\n\n[a]\nx = 1\ntimeout = 30\n\n[b]\ny = 2\n"
+        self.assertEqual(load_ini(text), {
+            "DEFAULT": {"retries": "3", "timeout": "10"},
+            "a": {"x": "1", "timeout": "30"},
+            "b": {"y": "2"},
+        })
+
+    def test_no_default_section_means_no_key(self):
+        self.assertNotIn("DEFAULT", load_ini("[a]\nx = 1\n"))
+
     def test_duplicate_section_is_an_error(self):
         with self.assertRaises(ConfigError) as ctx:
             load_ini("[a]\nx=1\n[a]\ny=2\n")

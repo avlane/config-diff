@@ -70,7 +70,17 @@ def load_ini(text, allow_duplicates=False):
         parser.read_string(text)
     except configparser.Error as exc:
         raise ConfigError("invalid INI: %s" % exc.message.strip())
-    return {name: dict(parser[name]) for name in parser.sections()}
+    # parser[section] also contains every key of [DEFAULT]; report those once, under
+    # their own section, instead of repeating them in every section.
+    defaults = dict(parser.defaults())
+    result = {}
+    if defaults:
+        result[parser.default_section] = defaults
+    for name in parser.sections():
+        own = {k: v for k, v in parser.items(name)
+               if not (k in defaults and v == defaults[k])}
+        result[name] = own
+    return result
 
 
 _ENV_KEY = re.compile(r"[A-Za-z_][A-Za-z0-9_.\-]*\Z")

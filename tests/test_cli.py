@@ -345,6 +345,12 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 2)
         self.assertIn("a.json: invalid JSON", err)
 
+    def test_ini_default_changes_are_reported_once(self):
+        old = self.write("old.ini", "[DEFAULT]\nretries = 3\n[a]\nx = 1\n[b]\ny = 2\n")
+        new = self.write("new.ini", "[DEFAULT]\nretries = 5\n[a]\nx = 1\n[b]\ny = 2\n")
+        code, out, _ = run(old, new)
+        self.assertEqual((code, out), (1, '~ DEFAULT.retries: "3" -> "5"\n'))
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))
