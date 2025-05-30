@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import json
+import re
 
 from .diffing import ADDED, CHANGED, REMOVED
 from .paths import Item, Member, format_path
@@ -134,3 +135,48 @@ def render_directory_plain(results, color=False):
             out.append(_paint("=== %s ===" % result.name, "bold", color) + "\n")
             out.append(render_plain(result.changes, color))
     return "".join(out)
+
+def _md_code(value):
+    """A Markdown code span for *value* that survives backticks, newlines and pipes."""
+    text = value.replace("\n", " ")
+    longest = max((len(run) for run in re.findall(r"`+", text)), default=0)
+    fence = "`" * (longest + 1)
+    pad = " " if text.startswith("`") or text.endswith("`") else ""
+    return (fence + pad + text + pad + fence).replace("|", "\\|")
+
+
+def _md_table(changes):
+    lines = ["| Change | Path | Old | New |", "| --- | --- | --- | --- |"]
+    for change in changes:
+        old = "" if change.kind == ADDED else _md_code(format_value(change.old))
+        new = "" if change.kind == REMOVED else _md_code(format_value(change.new))
+        lines.append("| %s | %s | %s | %s |" % (change.kind, _md_code(format_path(change.path)),
+                                                old, new))
+    return lines
+
+
+def render_markdown(changes):
+    """A table for pull request and chat comments."""
+    if not changes:
+        return "No differences.\n"
+    counts = summarize(changes)
+    parts = ", ".join("%d %s" % (n, kind) for kind, n in counts.items() if n)
+    lines = ["**%d difference%s** (%s)" % (len(changes), "" if len(changes) == 1 else "s", parts),
+             ""]
+    return "\n".join(lines + _md_table(changes)) + "\n"
+
+
+def render_directory_markdown(results):
+    differing = [r for r in results if r.status != "same"]
+    if not differing:
+        return "No differences.\n"
+    lines = []
+    for result in differing:
+        if result.status == "only-old":
+            lines.append("- only in old: %s" % _md_code(result.name))
+        elif result.status == "only-new":
+            lines.append("- only in new: %s" % _md_code(result.name))
+    for result in differing:
+        if result.status == "different":
+            lines += ["", "### %s" % _md_code(result.name), ""] + _md_table(result.changes)
+    return "\n".join(lines).lstrip("\n") + "\n"

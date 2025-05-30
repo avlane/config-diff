@@ -3,7 +3,8 @@ import unittest
 from configdiff.diffing import ADDED, CHANGED, REMOVED, Change
 import json
 
-from configdiff.render import format_value, render_json, render_plain, summary_line
+from configdiff.render import (format_value, render_json, render_markdown, render_plain,
+                               summary_line)
 
 
 class RenderPlainTests(unittest.TestCase):
@@ -56,6 +57,37 @@ class RenderColorTests(unittest.TestCase):
         import re
         colored = render_plain(self.CHANGES, color=True)
         self.assertEqual(re.sub(r"\x1b\[\d+m", "", colored), render_plain(self.CHANGES))
+
+
+class RenderMarkdownTests(unittest.TestCase):
+    def test_table(self):
+        changes = [Change(CHANGED, ("server", "port"), 8080, 8443),
+                   Change(ADDED, ("tags", 0), new="x"), Change(REMOVED, ("old",), old=True)]
+        self.assertEqual(render_markdown(changes).splitlines(), [
+            "**3 differences** (1 added, 1 removed, 1 changed)",
+            "",
+            "| Change | Path | Old | New |",
+            "| --- | --- | --- | --- |",
+            "| changed | `server.port` | `8080` | `8443` |",
+            "| added | `tags[0]` |  | `\"x\"` |",
+            "| removed | `old` | `true` |  |",
+        ])
+
+    def test_no_changes(self):
+        self.assertEqual(render_markdown([]), "No differences.\n")
+
+    def test_pipes_backticks_and_newlines_cannot_break_the_table(self):
+        change = Change(CHANGED, ("k",), "a|b", "x`y\nz")
+        row = render_markdown([change]).splitlines()[-1]
+        self.assertEqual(row, "| changed | `k` | `\"a\\|b\"` | ``\"x`y\\nz\"`` |")
+        self.assertEqual(len(row.replace("\\|", "").split("|")), 6)
+
+    def test_code_span_padding_for_edge_backticks(self):
+        from configdiff.render import _md_code
+        self.assertEqual(_md_code("a"), "`a`")
+        self.assertEqual(_md_code("`x"), "`` `x ``")
+        self.assertEqual(_md_code("x`"), "`` x` ``")
+        self.assertEqual(_md_code("a``b"), "``` a``b ```"[:0] or "```a``b```")
 
 
 class RenderJsonTests(unittest.TestCase):

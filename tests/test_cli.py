@@ -351,6 +351,18 @@ class CliTests(TempDirTestCase):
         code, out, _ = run(old, new)
         self.assertEqual((code, out), (1, '~ DEFAULT.retries: "3" -> "5"\n'))
 
+    def test_markdown_output(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "-o", "markdown")
+        self.assertEqual(code, 1)
+        self.assertIn("| changed | `server.workers` | `4` | `8` |", out)
+        self.assertTrue(out.startswith("**5 differences**"))
+
+    def test_markdown_for_directories(self):
+        _, out, _ = run(fixture("envs/old"), fixture("envs/new"), "-o", "markdown")
+        self.assertEqual(out.splitlines()[:2], ["- only in new: `added.ini`", "- only in old: `removed.toml`"])
+        self.assertIn("### `app.json`", out)
+        self.assertIn("| changed | `replicas` | `2` | `3` |", out)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

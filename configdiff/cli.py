@@ -11,11 +11,12 @@ from .diffing import ADDED, CHANGED, REMOVED, Options, diff
 from .loaders import ConfigError, LoadOptions, load_file, load_text, supported_formats
 from .paths import PatternError, parse_pattern, read_pattern_file
 from .redact import redact_changes, secret_patterns
-from .render import (directory_summary_line, render_directory_json, render_directory_plain,
-                     render_json, render_plain, summary_line)
+from .render import (directory_summary_line, render_directory_json, render_directory_markdown,
+                     render_directory_plain, render_json, render_markdown, render_plain,
+                     summary_line)
 
-RENDERERS = {"plain": render_plain, "json": render_json}
-DIRECTORY_RENDERERS = {"json": render_directory_json}
+RENDERERS = {"plain": render_plain, "json": render_json, "markdown": render_markdown}
+DIRECTORY_RENDERERS = {"json": render_directory_json, "markdown": render_directory_markdown}
 COLOR_MODES = ("auto", "always", "never")
 
 EXIT_SAME = 0
