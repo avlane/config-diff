@@ -232,9 +232,26 @@ class LoadOptions:
 
     coerce: read numbers and true/false in string-only formats (INI, .env) as such.
     allow_duplicates: accept repeated keys, the last one wins.
+    lowercase_keys: compare keys case-insensitively by lower-casing them.
     """
     coerce: bool = False
     allow_duplicates: bool = False
+    lowercase_keys: bool = False
+
+
+def lowercase_keys(data):
+    """Lower-case every mapping key; two keys that collapse into one are an error."""
+    if isinstance(data, dict):
+        result = {}
+        for key, value in data.items():
+            lowered = key.lower() if isinstance(key, str) else key
+            if lowered in result:
+                raise ConfigError("keys %r and %r differ only by case" % (lowered, key))
+            result[lowered] = lowercase_keys(value)
+        return result
+    if isinstance(data, list):
+        return [lowercase_keys(v) for v in data]
+    return data
 
 
 def load_text(text, fmt, name="<input>", options=None):
@@ -246,6 +263,11 @@ def load_text(text, fmt, name="<input>", options=None):
         raise ConfigError("%s: %s" % (name, exc))
     if options.coerce and fmt in _STRINGLY:
         data = coerce_scalars(data)
+    if options.lowercase_keys:
+        try:
+            data = lowercase_keys(data)
+        except ConfigError as exc:
+            raise ConfigError("%s: %s" % (name, exc))
     return data
 
 

@@ -3,7 +3,7 @@ import unittest
 
 from configdiff.loaders import (ConfigError, LoadOptions, coerce_scalar, coerce_scalars, detect_format,
                                 load_env, load_file, load_ini, load_json, load_text, load_toml,
-                                load_yaml)
+                                load_yaml, lowercase_keys)
 from tests.helpers import TempDirTestCase
 
 
@@ -162,6 +162,25 @@ class DuplicateKeyTests(unittest.TestCase):
         with self.assertRaises(ConfigError) as ctx:
             load_env("A=1\nB=2\nA=3\n")
         self.assertIn("line 3", str(ctx.exception))
+
+
+class LowercaseKeysTests(unittest.TestCase):
+    def test_nested_keys_are_lowered_values_are_not(self):
+        data = {"Server": {"HOST": "Example.COM", "Ports": [{"HTTP": 80}]}}
+        self.assertEqual(lowercase_keys(data),
+                         {"server": {"host": "Example.COM", "ports": [{"http": 80}]}})
+
+    def test_collisions_are_errors(self):
+        with self.assertRaises(ConfigError) as ctx:
+            lowercase_keys({"Port": 1, "PORT": 2})
+        self.assertIn("differ only by case", str(ctx.exception))
+
+    def test_via_load_text(self):
+        options = LoadOptions(lowercase_keys=True)
+        self.assertEqual(load_text("DB_HOST=x\n", "env", options=options), {"db_host": "x"})
+        with self.assertRaises(ConfigError) as ctx:
+            load_text("A=1\na=2\n", "env", "f.env", options)
+        self.assertIn("f.env", str(ctx.exception))
 
 
 class CoerceTests(unittest.TestCase):

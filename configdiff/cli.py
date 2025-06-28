@@ -69,6 +69,9 @@ def build_parser():
                              "PORT=8080 equals {\"PORT\": 8080}")
     parser.add_argument("--allow-duplicates", action="store_true",
                         help="accept repeated keys (the last one wins) instead of failing")
+    parser.add_argument("--case-insensitive-keys", action="store_true",
+                        help="compare keys ignoring case (they are lower-cased before "
+                             "comparing, so write PATH patterns in lower case)")
     parser.add_argument("-i", "--ignore", action="append", default=[], metavar="PATH",
                         help="do not compare PATH, e.g. 'server.port', 'users[*].email' or "
                              "'**.password' (repeatable)")
@@ -145,7 +148,8 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
         redactions += secret_patterns()
     if args.old == "-" and args.new == "-":
         parser.error("only one of OLD and NEW can be read from standard input")
-    load_options = LoadOptions(coerce=args.coerce, allow_duplicates=args.allow_duplicates)
+    load_options = LoadOptions(coerce=args.coerce, allow_duplicates=args.allow_duplicates,
+                                lowercase_keys=args.case_insensitive_keys)
 
     def compare(old, new):
         changes = diff(old, new, options)

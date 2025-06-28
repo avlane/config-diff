@@ -363,6 +363,13 @@ class CliTests(TempDirTestCase):
         self.assertIn("### `app.json`", out)
         self.assertIn("| changed | `replicas` | `2` | `3` |", out)
 
+    def test_case_insensitive_keys(self):
+        a = self.write("a.json", '{"Server": {"Port": 1}, "NAME": "x"}')
+        b = self.write("b.json", '{"server": {"PORT": 2}, "name": "x"}')
+        self.assertEqual(len(run(a, b)[1].splitlines()), 4)
+        code, out, _ = run(a, b, "--case-insensitive-keys")
+        self.assertEqual((code, out), (1, "~ server.port: 1 -> 2\n"))
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))
