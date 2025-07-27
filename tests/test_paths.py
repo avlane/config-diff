@@ -104,6 +104,16 @@ class PatternTests(unittest.TestCase):
         self.assertFalse(m("s[id=7]", ["s", Item("id", 8)]))
         self.assertTrue(m("s[*]", ["s", Item("id", 8)]))
 
+    def test_prefix_matching(self):
+        pattern = parse_pattern("a.b.c")
+        self.assertTrue(pattern.matches_prefix(()))
+        self.assertTrue(pattern.matches_prefix(("a",)))
+        self.assertTrue(pattern.matches_prefix(("a", "b", "c")))
+        self.assertFalse(pattern.matches_prefix(("a", "x")))
+        self.assertFalse(pattern.matches_prefix(("a", "b", "c", "d")))
+        self.assertTrue(parse_pattern("**.c").matches_prefix(("anything", "at", "all")))
+        self.assertTrue(parse_pattern("a.*.c").matches_prefix(("a", 3)))
+
     def test_errors(self):
         for bad in ("", "...", "a[", "a[x]", 'a["b', "a[1"):
             with self.assertRaises(PatternError, msg=bad):

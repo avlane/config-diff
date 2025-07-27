@@ -43,6 +43,20 @@ class Options:
     ignore: list = field(default_factory=list)      # Patterns whose paths are skipped
     list_keys: list = field(default_factory=list)   # [(Pattern, field)]: match items by field
     unordered: list = field(default_factory=list)   # Patterns of lists whose order is irrelevant
+    only: list = field(default_factory=list)        # if set, compare only these paths
+
+    def in_scope(self, path):
+        """With "only" patterns: can anything at or below *path* be selected?"""
+        if not self.only:
+            return True
+        return any(p.matches_prefix(path) or any(p.matches(path[:k]) for k in range(len(path) + 1))
+                   for p in self.only)
+
+    def inside_only(self, path):
+        """Is *path* selected by an "only" pattern, or inside a selected path?"""
+        if not self.only:
+            return True
+        return any(p.matches(path[:k]) for p in self.only for k in range(len(path) + 1))
 
     def is_unordered(self, path):
         return any(p.matches(path) for p in self.unordered)
@@ -73,6 +87,36 @@ def _prune(options, path, value):
     return value
 
 
+_DROP = object()
+
+
+def _restrict(options, path, value):
+    """Keep only the parts of *value* that "only" selects; _DROP if nothing is left."""
+    if options.inside_only(path):
+        return value
+    if isinstance(value, dict):
+        kept = {}
+        for key, item in value.items():
+            part = _restrict(options, path + (key,), item)
+            if part is not _DROP:
+                kept[key] = part
+        return kept if kept else _DROP
+    if isinstance(value, list):
+        kept = []
+        for index, item in enumerate(value):
+            part = _restrict(options, path + (index,), item)
+            if part is not _DROP:
+                kept.append(part)
+        return kept if kept else _DROP
+    return _DROP
+
+
+def _scoped(options, path, value):
+    """The part of a value reported whole that survives --ignore and --only."""
+    value = _prune(options, path, value)
+    return _restrict(options, path, value) if options.only else value
+
+
 def diff(old, new, options=None):
     """Return the list of Changes that turn *old* into *new*."""
     changes = []
@@ -81,7 +125,7 @@ def diff(old, new, options=None):
 
 
 def _diff(options, path, a, b, out):
-    if path and options.is_ignored(path):
+    if path and (options.is_ignored(path) or not options.in_scope(path)):
         return
     if isinstance(a, dict) and isinstance(b, dict):
         for key in a:
@@ -108,7 +152,10 @@ def _diff(options, path, a, b, out):
             else:
                 _diff(options, path + (index,), a[index], b[index], out)
     elif not _equal(a, b):
-        out.append(Change(CHANGED, path, _prune(options, path, a), _prune(options, path, b)))
+        old, new = _scoped(options, path, a), _scoped(options, path, b)
+        if old is not _DROP or new is not _DROP:
+            out.append(Change(CHANGED, path, None if old is _DROP else old,
+                              None if new is _DROP else new))
 
 
 def _keyed(items, name):
@@ -170,10 +217,16 @@ def _diff_unordered(options, path, a, b, out):
 
 
 def _removed(options, path, value, out):
-    if not options.is_ignored(path):
-        out.append(Change(REMOVED, path, old=_prune(options, path, value)))
+    if options.is_ignored(path):
+        return
+    value = _scoped(options, path, value)
+    if value is not _DROP:
+        out.append(Change(REMOVED, path, old=value))
 
 
 def _added(options, path, value, out):
-    if not options.is_ignored(path):
-        out.append(Change(ADDED, path, new=_prune(options, path, value)))
+    if options.is_ignored(path):
+        return
+    value = _scoped(options, path, value)
+    if value is not _DROP:
+        out.append(Change(ADDED, path, new=value))

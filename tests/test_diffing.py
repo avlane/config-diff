@@ -207,6 +207,49 @@ class UnorderedListTests(unittest.TestCase):
         self.assertEqual(diff(old, new, opts), [Change(CHANGED, ("s", Item("n", "a"), "p"), 1, 2)])
 
 
+def only(*patterns, **kw):
+    return Options(only=[parse_pattern(p) for p in patterns], **kw)
+
+
+class OnlyTests(unittest.TestCase):
+    OLD = {"server": {"port": 1, "host": "a"}, "db": {"pool": {"max": 1}, "url": "x"}, "n": 1}
+    NEW = {"server": {"port": 2, "host": "b"}, "db": {"pool": {"max": 2}, "url": "y"}, "n": 2}
+
+    def test_only_a_subtree(self):
+        self.assertEqual(diff(self.OLD, self.NEW, only("server")), [
+            Change(CHANGED, ("server", "port"), 1, 2), Change(CHANGED, ("server", "host"), "a", "b")])
+
+    def test_only_a_leaf_deep_inside(self):
+        self.assertEqual(diff(self.OLD, self.NEW, only("db.pool.max")),
+                         [Change(CHANGED, ("db", "pool", "max"), 1, 2)])
+
+    def test_several_paths(self):
+        paths = [c.path for c in diff(self.OLD, self.NEW, only("n", "server.port"))]
+        self.assertEqual(paths, [("server", "port"), ("n",)])
+
+    def test_wildcards(self):
+        paths = [c.path for c in diff(self.OLD, self.NEW, only("*.port", "**.max"))]
+        self.assertEqual(paths, [("server", "port"), ("db", "pool", "max")])
+
+    def test_combined_with_ignore(self):
+        opts = only("server", ignore=[parse_pattern("server.host")])
+        self.assertEqual(diff(self.OLD, self.NEW, opts), [Change(CHANGED, ("server", "port"), 1, 2)])
+
+    def test_added_and_removed_values_are_cut_down_to_the_scope(self):
+        changes = diff({}, {"db": {"host": "h", "password": "p"}, "other": 1}, only("db.host"))
+        self.assertEqual(changes, [Change(ADDED, ("db",), new={"host": "h"})])
+
+    def test_paths_outside_the_scope_that_are_added_are_skipped(self):
+        self.assertEqual(diff({"a": 1}, {"a": 1, "b": 2}, only("a")), [])
+
+    def test_nothing_in_scope(self):
+        self.assertEqual(diff(self.OLD, self.NEW, only("missing.path")), [])
+
+    def test_list_items(self):
+        old, new = {"u": [{"id": 1, "v": 1}, {"id": 2, "v": 1}]}, {"u": [{"id": 1, "v": 2}, {"id": 2, "v": 2}]}
+        self.assertEqual(diff(old, new, only("u[1].v")), [Change(CHANGED, ("u", 1, "v"), 1, 2)])
+
+
 class ListDiffTests(unittest.TestCase):
     def test_lists_are_compared_by_position(self):
         self.assertEqual(diff({"x": [1, 2, 3]}, {"x": [1, 5, 3]}),

@@ -87,7 +87,7 @@ class RenderMarkdownTests(unittest.TestCase):
         self.assertEqual(_md_code("a"), "`a`")
         self.assertEqual(_md_code("`x"), "`` `x ``")
         self.assertEqual(_md_code("x`"), "`` x` ``")
-        self.assertEqual(_md_code("a``b"), "``` a``b ```"[:0] or "```a``b```")
+        self.assertEqual(_md_code("a``b"), "```a``b```")
 
 
 class RenderJsonTests(unittest.TestCase):

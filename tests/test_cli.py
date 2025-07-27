@@ -370,6 +370,12 @@ class CliTests(TempDirTestCase):
         code, out, _ = run(a, b, "--case-insensitive-keys")
         self.assertEqual((code, out), (1, "~ server.port: 1 -> 2\n"))
 
+    def test_only(self):
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "--only", "server")
+        self.assertEqual((code, out), (1, "~ server.workers: 4 -> 8\n"))
+        code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "--only", "name")
+        self.assertEqual((code, out), (0, ""))
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

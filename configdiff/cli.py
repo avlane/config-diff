@@ -75,6 +75,9 @@ def build_parser():
     parser.add_argument("-i", "--ignore", action="append", default=[], metavar="PATH",
                         help="do not compare PATH, e.g. 'server.port', 'users[*].email' or "
                              "'**.password' (repeatable)")
+    parser.add_argument("--only", action="append", default=[], metavar="PATH",
+                        help="compare only PATH and what is below it (repeatable); "
+                             "everything else is left out")
     parser.add_argument("--ignore-file", action="append", default=[], metavar="FILE",
                         help="read paths to ignore from FILE, one per line (# starts a comment)")
     parser.add_argument("-k", "--list-key", action="append", default=[], metavar="PATH=FIELD",
@@ -138,6 +141,7 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
             parser.error("cannot read ignore file %s: %s" % (name, exc.strerror or exc))
     try:
         options = Options(ignore=[parse_pattern(p) for p in ignored],
+                          only=[parse_pattern(p) for p in args.only],
                           list_keys=[_list_key(spec) for spec in args.list_key],
                           unordered=[parse_pattern(p) for p in
                                      (["**"] if args.unordered_lists else args.unordered)])

@@ -120,6 +120,24 @@ class Pattern:
     def matches(self, path):
         return self._match(0, path, 0)
 
+    def matches_prefix(self, path):
+        """True if *path* could be the start of a path that this pattern matches."""
+        return self._match_prefix(0, path, 0)
+
+    def _match_prefix(self, ti, path, pi):
+        tokens = self.tokens
+        while pi < len(path):
+            if ti >= len(tokens):
+                return False
+            token = tokens[ti]
+            if token.kind == "deep":
+                return any(self._match_prefix(ti + 1, path, k) for k in range(pi, len(path) + 1))
+            if not token.matches(path[pi]):
+                return False
+            ti += 1
+            pi += 1
+        return True
+
     def _match(self, ti, path, pi):
         tokens = self.tokens
         while ti < len(tokens):
