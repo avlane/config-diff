@@ -126,6 +126,27 @@ class KeyedListTests(unittest.TestCase):
             Change(ADDED, ("s", Item("n", "d")), new={"n": "d", "p": 4}),
         ])
 
+    def test_matching_does_not_compare_every_item_with_every_other(self):
+        class Key:
+            compares = 0
+
+            def __init__(self, n):
+                self.n = n
+
+            def __hash__(self):
+                return hash(self.n)
+
+            def __eq__(self, other):
+                Key.compares += 1
+                return isinstance(other, Key) and self.n == other.n
+
+        size = 600
+        old = {"s": [{"id": Key(i), "v": 1} for i in range(size)]}
+        new = {"s": [{"id": Key(i), "v": 2} for i in reversed(range(size))]}
+        changes = diff(old, new, keyed("s", "id"))
+        self.assertEqual(len(changes), size)
+        self.assertLess(Key.compares, 10 * size)  # was ~size**2 / 2 comparisons
+
     def test_path_rendering(self):
         from configdiff.paths import format_path
         self.assertEqual(format_path(("s", Item("n", "b"), "p")), "s[n=b].p")

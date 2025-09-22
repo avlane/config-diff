@@ -170,15 +170,17 @@ def _keyed(items, name):
 
 def _diff_keyed(options, path, a, b, name, out):
     """Compare lists of mappings by the value of one field instead of by position."""
+    by_key = {item[name]: item for item in b}
+    old_keys = {item[name] for item in a}
     for item in a:
         sub = path + (Item(name, item[name]),)
-        other = next((o for o in b if o[name] == item[name]), _MISSING)
+        other = by_key.get(item[name], _MISSING)
         if other is _MISSING:
             _removed(options, sub, item, out)
         else:
             _diff(options, sub, item, other, out)
     for item in b:
-        if not any(o[name] == item[name] for o in a):
+        if item[name] not in old_keys:
             _added(options, path + (Item(name, item[name]),), item, out)
 
 
