@@ -110,15 +110,16 @@ def render_plain(changes, color=False):
     lines = []
     for change in changes:
         path = format_path(change.path)
-        if change.kind == ADDED:
-            lines.append(_paint("+ %s: %s" % (path, format_value(change.new)), "green", color))
-        elif change.kind == REMOVED:
-            lines.append(_paint("- %s: %s" % (path, format_value(change.old)), "red", color))
-        else:
-            lines.append("%s %s: %s -> %s" % (
-                _paint("~", "yellow", color), _paint(path, "bold", color),
-                _paint(format_value(change.old), "red", color),
-                _paint(format_value(change.new), "green", color)))
+        match change.kind:
+            case "added":
+                lines.append(_paint("+ %s: %s" % (path, format_value(change.new)), "green", color))
+            case "removed":
+                lines.append(_paint("- %s: %s" % (path, format_value(change.old)), "red", color))
+            case _:
+                lines.append("%s %s: %s -> %s" % (
+                    _paint("~", "yellow", color), _paint(path, "bold", color),
+                    _paint(format_value(change.old), "red", color),
+                    _paint(format_value(change.new), "green", color)))
     return "".join(line + "\n" for line in lines)
 
 def render_directory_plain(results, color=False):

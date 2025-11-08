@@ -21,7 +21,7 @@ comparisons across formats. Pure Python standard library, no dependencies.
     pip install .            # installs the `config-diff` command
     python -m configdiff     # or run from a checkout
 
-Python 3.9 or newer (TOML needs 3.11+ for `tomllib`).
+Python 3.10 or newer (TOML needs 3.11+ for `tomllib`).
 
 ## Usage
 

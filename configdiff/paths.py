@@ -43,14 +43,14 @@ def format_path(path):
     return out or "$"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Item:
     """A list element identified by one of its fields: users[id=7]."""
     field: str
     value: object
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Member:
     """An element of an unordered list: tags[="beta"]."""
     value: object

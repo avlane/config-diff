@@ -13,7 +13,7 @@ REMOVED = "removed"
 CHANGED = "changed"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class Change:
     kind: str
     path: tuple
