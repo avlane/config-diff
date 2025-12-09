@@ -393,6 +393,13 @@ class CliTests(TempDirTestCase):
         self.assertEqual(code, 2)
         self.assertIn("invalid JSON", err)
 
+    def test_help_has_examples_and_exit_status(self):
+        code, out, _ = run("--help")
+        self.assertEqual(code, 0)
+        self.assertIn("examples:", out)
+        self.assertIn("exit status:", out)
+        self.assertIn("--fail-on", out)
+
     def test_version(self):
         code, out, _ = run("--version")
         self.assertEqual(code, 0)

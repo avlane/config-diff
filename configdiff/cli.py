@@ -51,10 +51,33 @@ def _list_key(spec):
     return parse_pattern(path), name
 
 
+EPILOG = """\
+examples:
+  config-diff staging.json prod.json
+  config-diff old.env new.env --redact-secrets
+  config-diff a.yaml b.yaml -k 'services=name' -i '**.updated_at'
+  config-diff .env config.json --coerce --case-insensitive-keys
+  config-diff conf/staging conf/prod --summary
+  config-diff a.json b.json --fail-on removed,changed -q      # CI gate
+
+path patterns (for -i, --only, --redact, -u, -k):
+  server.port   users[0].name   users[*].email   servers[name=web-1]
+  *  one segment    **  any number of segments    ["a.b"]  a key containing a dot
+
+exit status:
+  0  no differences (or none of the kinds listed in --fail-on)
+  1  differences found
+  2  usage error, or an input file could not be read or parsed
+"""
+
+
 def build_parser():
     parser = argparse.ArgumentParser(
         prog="config-diff",
-        description="Semantic diff of two configuration files, or of two directories of them.")
+        description="Semantic diff of two configuration files, or of two directories of them. "
+                    "Compares parsed values, so key order, whitespace and comments don't matter.",
+        epilog=EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("old", metavar="OLD",
                         help="the original file or directory, or - for standard input")
     parser.add_argument("new", metavar="NEW",
