@@ -257,6 +257,8 @@ def lowercase_keys(data):
 def load_text(text, fmt, name="<input>", options=None):
     """Parse *text* as format *fmt*; errors mention *name*."""
     options = options or LoadOptions()
+    if text.startswith("\ufeff"):  # e.g. read from standard input
+        text = text[1:]
     try:
         data = _FORMATS[fmt](text, options.allow_duplicates)
     except ConfigError as exc:
@@ -273,7 +275,10 @@ def load_text(text, fmt, name="<input>", options=None):
 
 def read_text(path):
     try:
-        with open(path, encoding="utf-8") as handle:
+        # utf-8-sig: Windows editors put a byte order mark at the start of the file,
+        # which would end up in the first key of a .env or INI file and make the
+        # json module refuse the file.
+        with open(path, encoding="utf-8-sig") as handle:
             return handle.read()
     except OSError as exc:
         raise ConfigError("cannot read %s: %s" % (path, exc.strerror or exc))

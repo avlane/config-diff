@@ -248,6 +248,23 @@ class LoadFileTests(TempDirTestCase):
             load_file(path)
         self.assertIn("bad.json", str(ctx.exception))
 
+    def test_byte_order_mark_is_ignored_for_every_format(self):
+        samples = {
+            "a.json": ('{"k": 1}', {"k": 1}),
+            "a.env": ("FIRST=1\nSECOND=2\n", {"FIRST": "1", "SECOND": "2"}),
+            "a.ini": ("[s]\nk = v\n", {"s": {"k": "v"}}),
+            "a.yaml": ("k: 1\n", {"k": 1}),
+            "a.toml": ('k = 1\n', {"k": 1}),
+        }
+        for name, (text, expected) in samples.items():
+            if name.endswith(".toml") and not HAS_TOMLLIB:
+                continue
+            path = self.write(name, "\ufeff" + text)
+            self.assertEqual(load_file(path), expected, name)
+
+    def test_byte_order_mark_on_standard_input_text(self):
+        self.assertEqual(load_text("\ufeffFIRST=1\n", "env"), {"FIRST": "1"})
+
     def test_invalid_utf8(self):
         path = self.write("latin.json", '{"a": "caf\xe9"}', encoding="latin-1")
         with self.assertRaises(ConfigError) as ctx:
