@@ -233,10 +233,38 @@ class LoadOptions:
     coerce: read numbers and true/false in string-only formats (INI, .env) as such.
     allow_duplicates: accept repeated keys, the last one wins.
     lowercase_keys: compare keys case-insensitively by lower-casing them.
+    env_prefix: in .env files keep only variables that start with this and drop it.
+    unflatten: in .env files split names at this separator into nested mappings, so
+        DB__HOST=x with "__" becomes {"DB": {"HOST": "x"}}.
     """
     coerce: bool = False
     allow_duplicates: bool = False
     lowercase_keys: bool = False
+    env_prefix: str = ""
+    unflatten: str = ""
+
+
+def unflatten_env(data, prefix="", separator=""):
+    """Select variables by *prefix* and nest them by splitting names at *separator*."""
+    result = {}
+    for name, value in data.items():
+        if prefix:
+            if not name.startswith(prefix):
+                continue
+            name = name[len(prefix):]
+        parts = name.split(separator) if separator else [name]
+        if not all(parts):
+            raise ConfigError("variable %r has an empty name part when split at %r"
+                              % (prefix + name, separator))
+        node = result
+        for part in parts[:-1]:
+            node = node.setdefault(part, {})
+            if not isinstance(node, dict):
+                raise ConfigError("%r is both a value and a section" % part)
+        if parts[-1] in node:
+            raise ConfigError("%r is both a value and a section" % parts[-1])
+        node[parts[-1]] = value
+    return result
 
 
 def lowercase_keys(data):
@@ -265,6 +293,11 @@ def load_text(text, fmt, name="<input>", options=None):
         raise ConfigError("%s: %s" % (name, exc))
     if options.coerce and fmt in _STRINGLY:
         data = coerce_scalars(data)
+    if fmt == "env" and (options.env_prefix or options.unflatten):
+        try:
+            data = unflatten_env(data, options.env_prefix, options.unflatten)
+        except ConfigError as exc:
+            raise ConfigError("%s: %s" % (name, exc))
     if options.lowercase_keys:
         try:
             data = lowercase_keys(data)

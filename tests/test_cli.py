@@ -376,6 +376,21 @@ class CliTests(TempDirTestCase):
         code, out, _ = run(fixture("app_old.json"), fixture("app_new.json"), "--only", "name")
         self.assertEqual((code, out), (0, ""))
 
+    def test_environment_style_variables_against_a_nested_config(self):
+        env = self.write("app.env", "APP__DB__HOST=db1\nAPP__DB__PORT=5432\nAPP__DEBUG=true\nHOME=/root\n")
+        cfg = self.write("app.yaml", "db:\n  host: db1\n  port: 5433\ndebug: true\n")
+        args = [env, cfg, "--env-prefix", "APP__", "--unflatten", "__",
+                "--case-insensitive-keys", "--coerce"]
+        code, out, _ = run(*args)
+        self.assertEqual((code, out), (1, "~ db.port: 5432 -> 5433\n"))
+
+    def test_unflatten_conflicts_are_reported(self):
+        env = self.write("bad.env", "A=1\nA__B=2\n")
+        code, _, err = run(env, env, "--unflatten", "__")
+        self.assertEqual(code, 2)
+        self.assertIn("bad.env", err)
+        self.assertIn("both a value and a section", err)
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

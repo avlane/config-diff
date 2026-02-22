@@ -47,6 +47,9 @@ standard input (then a format is required):
   and `null` in them as numbers, booleans and null, so `.env` can be compared with JSON.
   `0755` and `1e3` stay strings.
 * `--case-insensitive-keys` lower-cases all keys first.
+* Twelve-factor style environment variables can be compared with a nested config file:
+  `--env-prefix APP__ --unflatten __` turns `APP__DB__HOST=db1` into `{"DB": {"HOST": "db1"}}`
+  (combine with `--case-insensitive-keys --coerce`).
 
 ### Choosing paths
 

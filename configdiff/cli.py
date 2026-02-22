@@ -92,6 +92,12 @@ def build_parser():
                              "PORT=8080 equals {\"PORT\": 8080}")
     parser.add_argument("--allow-duplicates", action="store_true",
                         help="accept repeated keys (the last one wins) instead of failing")
+    parser.add_argument("--env-prefix", default="", metavar="PREFIX",
+                        help="in .env files, compare only variables starting with PREFIX and "
+                             "drop the prefix")
+    parser.add_argument("--unflatten", default="", metavar="SEP",
+                        help="in .env files, split variable names at SEP into nested "
+                             "sections: APP__DB__HOST becomes app.db.host with '__'")
     parser.add_argument("--case-insensitive-keys", action="store_true",
                         help="compare keys ignoring case (they are lower-cased before "
                              "comparing, so write PATH patterns in lower case)")
@@ -176,7 +182,8 @@ def main(argv=None, stdout=None, stderr=None, stdin=None):
     if args.old == "-" and args.new == "-":
         parser.error("only one of OLD and NEW can be read from standard input")
     load_options = LoadOptions(coerce=args.coerce, allow_duplicates=args.allow_duplicates,
-                                lowercase_keys=args.case_insensitive_keys)
+                                lowercase_keys=args.case_insensitive_keys,
+                                env_prefix=args.env_prefix, unflatten=args.unflatten)
 
     def compare(old, new):
         changes = diff(old, new, options)

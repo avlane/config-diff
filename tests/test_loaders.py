@@ -3,7 +3,7 @@ import unittest
 
 from configdiff.loaders import (ConfigError, LoadOptions, coerce_scalar, coerce_scalars, detect_format,
                                 load_env, load_file, load_ini, load_json, load_text, load_toml,
-                                load_yaml, lowercase_keys)
+                                load_yaml, lowercase_keys, unflatten_env)
 from tests.helpers import TempDirTestCase
 
 
@@ -162,6 +162,33 @@ class DuplicateKeyTests(unittest.TestCase):
         with self.assertRaises(ConfigError) as ctx:
             load_env("A=1\nB=2\nA=3\n")
         self.assertIn("line 3", str(ctx.exception))
+
+
+class UnflattenEnvTests(unittest.TestCase):
+    def test_prefix_filters_and_strips(self):
+        data = {"APP_HOST": "h", "APP_PORT": "1", "PATH": "/bin"}
+        self.assertEqual(unflatten_env(data, prefix="APP_"), {"HOST": "h", "PORT": "1"})
+
+    def test_separator_nests(self):
+        data = {"DB__HOST": "h", "DB__POOL__MAX": "5", "NAME": "n"}
+        self.assertEqual(unflatten_env(data, separator="__"),
+                         {"DB": {"HOST": "h", "POOL": {"MAX": "5"}}, "NAME": "n"})
+
+    def test_prefix_and_separator_together(self):
+        data = {"APP__DB__HOST": "h", "OTHER__X": "1"}
+        self.assertEqual(unflatten_env(data, "APP__", "__"), {"DB": {"HOST": "h"}})
+
+    def test_conflicts_and_empty_parts(self):
+        for data in ({"A": "1", "A__B": "2"}, {"A__B": "2", "A": "1"}, {"A____B": "x"},
+                     {"__A": "x"}):
+            with self.assertRaises(ConfigError, msg=data):
+                unflatten_env(data, separator="__")
+
+    def test_via_load_text_only_affects_env_files(self):
+        options = LoadOptions(unflatten="__", env_prefix="APP__", lowercase_keys=True, coerce=True)
+        self.assertEqual(load_text("APP__DB__PORT=5432\nOTHER=1\n", "env", options=options),
+                         {"db": {"port": 5432}})
+        self.assertEqual(load_text('{"A__B": 1}', "json", options=options), {"a__b": 1})
 
 
 class LowercaseKeysTests(unittest.TestCase):
