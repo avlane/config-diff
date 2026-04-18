@@ -433,6 +433,19 @@ class UseColorTests(unittest.TestCase):
         self.assertTrue(use_color("auto", tty, {}))
         self.assertFalse(use_color("auto", pipe, {}))
 
+    def test_force_color(self):
+        pipe = io.StringIO()
+        self.assertTrue(use_color("auto", pipe, {"FORCE_COLOR": "1"}))
+        self.assertFalse(use_color("auto", pipe, {"FORCE_COLOR": "0"}))
+        self.assertFalse(use_color("auto", pipe, {"FORCE_COLOR": ""}))
+        self.assertFalse(use_color("auto", pipe, {"FORCE_COLOR": "1", "NO_COLOR": "1"}))
+        self.assertFalse(use_color("never", pipe, {"FORCE_COLOR": "1"}))
+
+    def test_dumb_terminals_get_no_color(self):
+        self.assertFalse(use_color("auto", self.Tty(), {"TERM": "dumb"}))
+        self.assertTrue(use_color("auto", self.Tty(), {"TERM": "xterm-256color"}))
+        self.assertTrue(use_color("always", self.Tty(), {"TERM": "dumb"}))
+
     def test_no_color_convention(self):
         self.assertFalse(use_color("auto", self.Tty(), {"NO_COLOR": "1"}))
         self.assertTrue(use_color("auto", self.Tty(), {"NO_COLOR": ""}))

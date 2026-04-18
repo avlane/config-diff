@@ -76,7 +76,7 @@ Paths are written `server.ports[1].name`. Keys with special characters are brack
 | `-o plain` (default) | `+` added, `-` removed, `~` changed; colored on a terminal |
 | `-o json` | `{"equal", "summary", "changes": [{"kind", "path", "segments", "old", "new"}]}` |
 | `-o markdown` | a table for pull request comments |
-| `--color auto\|always\|never` | `NO_COLOR` is honoured |
+| `--color auto\|always\|never` | `NO_COLOR` turns color off, `FORCE_COLOR` forces it, `TERM=dumb` disables it |
 | `--summary` | end plain output with `3 differences (1 added, 2 changed)` |
 | `-q`, `--quiet` | no output, only the exit status |
 

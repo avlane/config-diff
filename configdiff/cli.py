@@ -25,10 +25,19 @@ EXIT_ERROR = 2
 
 
 def use_color(mode, stream, environ):
-    """Decide whether to emit ANSI colors: --color, then NO_COLOR, then the terminal."""
+    """Decide whether to emit ANSI colors.
+
+    --color always/never decide on their own. In auto mode NO_COLOR wins, then
+    FORCE_COLOR (CI systems set it for logs that are rendered later), then a
+    terminal that is not TERM=dumb.
+    """
     if mode == "always":
         return True
     if mode == "never" or environ.get("NO_COLOR"):
+        return False
+    if environ.get("FORCE_COLOR") not in (None, "", "0"):
+        return True
+    if environ.get("TERM") == "dumb":
         return False
     return hasattr(stream, "isatty") and stream.isatty()
 
