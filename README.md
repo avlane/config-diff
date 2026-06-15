@@ -123,6 +123,8 @@ aliases, merge keys, tags, multiple documents, complex keys, multi-line plain or
 scalars - with an error that names the line, rather than guessing. If you need those,
 convert the file to JSON first (for example `yq -o=json`) and diff that.
 
+See [CHANGELOG.md](CHANGELOG.md) for what changed between versions.
+
 ## Development
 
     python -m unittest discover
