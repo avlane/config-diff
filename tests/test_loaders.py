@@ -129,6 +129,12 @@ class YamlLoaderTests(unittest.TestCase):
             load_yaml("a: &x 1\n")
         self.assertIn("unsupported YAML: line 1", str(ctx.exception))
 
+    def test_empty_file_is_an_empty_mapping(self):
+        self.assertEqual(load_yaml(""), {})
+        self.assertEqual(load_yaml("# nothing here yet\n"), {})
+        self.assertEqual(load_yaml("---\n"), {})
+        self.assertIsNone(load_yaml("null\n"))
+
     def test_detects_yaml(self):
         self.assertEqual(detect_format("a.yaml"), "yaml")
         self.assertEqual(detect_format("a.yml"), "yaml")

@@ -60,6 +60,8 @@ class ScalarTests(unittest.TestCase):
     def test_empty_documents(self):
         self.assertIsNone(loads(""))
         self.assertIsNone(loads("# only a comment\n\n"))
+        self.assertEqual(loads("", empty={}), {})
+        self.assertIsNone(loads("~\n", empty={}))  # an explicit null stays null
 
 
 class MappingTests(unittest.TestCase):

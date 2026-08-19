@@ -391,6 +391,12 @@ class CliTests(TempDirTestCase):
         self.assertIn("bad.env", err)
         self.assertIn("both a value and a section", err)
 
+    def test_empty_yaml_file_against_a_filled_one(self):
+        empty = self.write("empty.yaml", "# to be filled in\n")
+        filled = self.write("filled.yaml", "a: 1\n")
+        code, out, _ = run(empty, filled)
+        self.assertEqual((code, out), (1, "+ a: 1\n"))
+
     def test_missing_file_exits_2(self):
         code, out, err = run(fixture("app_old.json"), self.tmp + "/missing.json")
         self.assertEqual((code, out), (2, ""))

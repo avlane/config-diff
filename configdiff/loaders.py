@@ -164,7 +164,8 @@ def load_yaml(text, allow_duplicates=False):
     """Parse the supported subset of YAML (see configdiff.yamlsubset)."""
     from . import yamlsubset
     try:
-        return yamlsubset.loads(text, allow_duplicates)
+        # An empty file is an empty configuration, not the value null.
+        return yamlsubset.loads(text, allow_duplicates, empty={})
     except yamlsubset.YamlSubsetError as exc:
         raise ConfigError("invalid or unsupported YAML: %s" % exc)
 

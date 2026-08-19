@@ -56,13 +56,14 @@ _ESCAPES = {
 }
 
 
-def loads(text, allow_duplicates=False):
+def loads(text, allow_duplicates=False, empty=None):
     """Parse *text* and return dicts, lists and scalars.
 
     Duplicate mapping keys are an error unless *allow_duplicates* is set, in
-    which case the last one wins.
+    which case the last one wins. A document without any content (empty, or
+    only comments) gives *empty*.
     """
-    return _Parser(text, allow_duplicates).parse()
+    return _Parser(text, allow_duplicates, empty).parse()
 
 
 def _resolve_plain(text):
@@ -90,8 +91,9 @@ def _resolve_plain(text):
 
 
 class _Parser:
-    def __init__(self, text, allow_duplicates=False):
+    def __init__(self, text, allow_duplicates=False, empty=None):
         self.allow_duplicates = allow_duplicates
+        self.empty = empty
         if text.startswith("\ufeff"):
             text = text[1:]
         self.raw = text.replace("\r\n", "\n").replace("\r", "\n").split("\n")
@@ -138,7 +140,7 @@ class _Parser:
     def parse(self):
         first = self._peek()
         if first is None:
-            return None
+            return self.empty
         value = self._parse_block(first.indent)
         extra = self._peek()
         if extra is not None:
